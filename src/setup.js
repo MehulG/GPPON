@@ -1,70 +1,105 @@
+// setup.js
 import GPPONNode from './modules/GPPON_node.js'
+import net from 'net'
 
-async function setupNetwork() {
-  // Start registrar nodes
-  const registrar1 = new GPPONNode({ 
-    port: 6000, 
-    enableMDNS: true,
-    isRegistrar: true 
-  })
-  const registrar2 = new GPPONNode({ 
-    port: 6001, 
-    enableMDNS: true,
-    isRegistrar: true 
-  })
-
-  await Promise.all([registrar1.start(), registrar2.start()])
-  
-  // Get bootstrap list
-  const bootstrapList = [
-    registrar1.getMultiaddr(),
-    registrar2.getMultiaddr()
-  ]
-
-  // Start regular nodes
-  const nodes = []
-  for(let i = 0; i < 100; i++) {
-    const node = new GPPONNode({
-      port: 6002 + i,
-      enableMDNS: true,
-      bootstrapList
-    })
-    nodes.push(node)
-  }
-
-  // Start all regular nodes with a slight delay between each
-  for (const node of nodes) {
-    await node.start()
-    await new Promise(resolve => setTimeout(resolve, 20))
-  }
-
-  // Print network status every 10 seconds
-  setInterval(() => {
-    console.log('\n=== Network Status ===')
-    console.log(`Registrar 1 (port 6000): ${registrar1.getDiscoveredPeers().length} peers`)
-    console.log(`Registrar 2 (port 6001): ${registrar2.getDiscoveredPeers().length} peers`)
-    nodes.forEach((node, i) => {
-      console.log(`Node ${6002 + i}: ${node.getDiscoveredPeers().length} peers`)
-    })
-  }, 10000)
-
-  return { registrars: [registrar1, registrar2], nodes }
+const DEFAULT_CONFIG = {
+  registrarCount: 2,
+  nodeCount: 5,
+  baseRegistrarPort: 6000,
+  enableMDNS: true,
+  startupDelay: 500, // ms between node starts
+  statusInterval: 10000 // ms between status updates
 }
 
-// Handle graceful shutdown
-process.on('SIGINT', async () => {
-  console.log('\n\nShutting down GPPON network...')
-  const { registrars, nodes } = await network
-  await Promise.all([
-    ...registrars.map(r => r.stop()),
-    ...nodes.map(n => n.stop())
-  ])
-  process.exit(0)
-})
+async function isPortAvailable(port) {
+  return new Promise((resolve) => {
+    const server = net.createServer()
+    server.once('error', () => resolve(false))
+    server.once('listening', () => {
+      server.close()
+      resolve(true)
+    })
+    server.listen(port)
+  })
+}
 
-const network = setupNetwork().catch(error => {
-  console.error('Error setting up network:', error)
-  process.exit(1)
-})
+async function findAvailablePort(startPort) {
+  let port = startPort
+  while (!(await isPortAvailable(port))) {
+    port++
+  }
+  return port
+}
 
-export { setupNetwork }
+async function setupNetwork(userConfig = {}) {
+  const config = { ...DEFAULT_CONFIG, ...userConfig }
+
+  try {
+    const registrars = []
+    let nextPort = config.baseRegistrarPort
+
+    // Start first registrar
+    const firstRegistrar = new GPPONNode({
+      port: await findAvailablePort(nextPort),
+      enableMDNS: config.enableMDNS,
+      isRegistrar: true
+    })
+    await firstRegistrar.start()
+    registrars.push(firstRegistrar)
+    nextPort = firstRegistrar.config.port + 1
+
+    // Start remaining registrars with bootstrap to first registrar
+    for (let i = 1; i < config.registrarCount; i++) {
+      const registrar = new GPPONNode({
+        port: await findAvailablePort(nextPort),
+        enableMDNS: config.enableMDNS,
+        isRegistrar: true,
+        bootstrapList: [firstRegistrar.getMultiaddr()]
+      })
+      await registrar.start()
+      registrars.push(registrar)
+      nextPort = registrar.config.port + 1
+    }
+
+    // Get complete bootstrap list
+    const bootstrapList = registrars.map(r => r.getMultiaddr())
+
+    // Start regular nodes with full bootstrap list
+    const nodes = []
+    for (let i = 0; i < config.nodeCount; i++) {
+      nextPort = await findAvailablePort(nextPort)
+      const node = new GPPONNode({
+        port: nextPort,
+        enableMDNS: config.enableMDNS,
+        bootstrapList  // All nodes get full registrar list
+      })
+      await node.start()
+      nodes.push(node)
+      await new Promise(resolve => setTimeout(resolve, config.startupDelay))
+      nextPort++
+    }
+    // Status monitoring
+    const statusInterval = setInterval(() => {
+      console.log('\n=== Network Status ===')
+      registrars.forEach((registrar, idx) => {
+        console.log(`Registrar ${idx + 1} (port ${registrar.config.port}): ${registrar.getDiscoveredPeers().length} peers`)
+      })
+      nodes.forEach((node) => {
+        console.log(`Node ${node.config.port}: ${node.getDiscoveredPeers().length} peers`)
+      })
+    }, config.statusInterval)
+
+    return {
+      registrars,
+      nodes,
+      cleanup: () => {
+        clearInterval(statusInterval)
+      }
+    }
+  } catch (error) {
+    console.error('Error in setupNetwork:', error)
+    throw error
+  }
+}
+
+export { setupNetwork, DEFAULT_CONFIG }
