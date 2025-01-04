@@ -7,6 +7,7 @@ import { mdns } from '@libp2p/mdns'
 import { bootstrap } from '@libp2p/bootstrap'
 import { identify } from '@libp2p/identify'
 import { EventEmitter } from 'events'
+import PeerConnectionManager from './PeerConnectionManager.js'
 
 class GPPONNode extends EventEmitter {
   constructor(config) {
@@ -16,6 +17,7 @@ class GPPONNode extends EventEmitter {
     this.peerId = null
     this.discoveredPeers = new Set()
     this.isRegistrar = config.isRegistrar || false
+    this.connectionManager = null
   }
 
   async start() {
@@ -29,7 +31,7 @@ class GPPONNode extends EventEmitter {
       services: {
         identify: identify(),
         dht: kadDHT({
-          clientMode: false, // Allow all nodes to participate in DHT
+          clientMode: false,
           protocol: '/gppon/1.0.0',
           initialStabilizeDelay: 1000,
           queryDelay: 500,
@@ -57,6 +59,19 @@ class GPPONNode extends EventEmitter {
     this.node = await createLibp2p(options)
     this.peerId = this.node.peerId.toString()
 
+    // Initialize peer connection manager
+    this.connectionManager = new PeerConnectionManager(this.node)
+
+    // Set up event listeners
+    this.setupEventListeners()
+
+    await this.node.start()
+    console.log(`Node started on port ${this.config.port}${this.isRegistrar ? ' (Registrar)' : ''} with ID: ${this.peerId}`)
+    return this.peerId
+  }
+
+  setupEventListeners() {
+    // Handle peer discovery
     this.node.addEventListener('peer:discovery', (evt) => {
       try {
         if (evt?.detail?.id) {
@@ -71,21 +86,25 @@ class GPPONNode extends EventEmitter {
       }
     })
 
-    this.node.addEventListener('peer:connect', (evt) => {
-      try {
-        if (evt?.detail?.remotePeer) {
-          const peerId = evt.detail.remotePeer.toString()
-          console.log(`Node ${this.config.port}${this.isRegistrar ? ' (Registrar)' : ''} connected to peer: ${peerId}`)
-          this.emit('peerConnected', peerId)
-        }
-      } catch (error) {
-        console.error('Error in peer:connect event:', error)
-      }
+    // Forward connection manager events
+    this.connectionManager.on('peerConnected', (data) => {
+      console.log(`Node ${this.config.port}: Connected to peer ${data.peerId}`)
+      this.emit('peerConnected', data)
     })
 
-    await this.node.start()
-    console.log(`Node started on port ${this.config.port}${this.isRegistrar ? ' (Registrar)' : ''} with ID: ${this.peerId}`)
-    return this.peerId
+    this.connectionManager.on('peerDisconnected', (data) => {
+      console.log(`Node ${this.config.port}: Disconnected from peer ${data.peerId}`)
+      this.emit('peerDisconnected', data)
+    })
+
+    this.connectionManager.on('heartbeat', (data) => {
+      this.emit('heartbeat', data)
+    })
+
+    this.connectionManager.on('reconnectFailed', (data) => {
+      console.warn(`Node ${this.config.port}: Failed to reconnect to peer ${data.peerId}`)
+      this.emit('reconnectFailed', data)
+    })
   }
 
   getMultiaddr() {
@@ -94,6 +113,19 @@ class GPPONNode extends EventEmitter {
 
   getDiscoveredPeers() {
     return Array.from(this.discoveredPeers)
+  }
+
+  async getNetworkStats() {
+    if (this.connectionManager) {
+      return await this.connectionManager.getNetworkStats()
+    }
+    return null
+  }
+
+  async disconnectPeer(peerId) {
+    if (this.connectionManager) {
+      await this.connectionManager.disconnectPeer(peerId)
+    }
   }
 
   async stop() {
