@@ -5,6 +5,7 @@ import { noise } from '@chainsafe/libp2p-noise'
 import { kadDHT } from '@libp2p/kad-dht'
 import { mdns } from '@libp2p/mdns'
 import { bootstrap } from '@libp2p/bootstrap'
+import { identify } from '@libp2p/identify'
 import { EventEmitter } from 'events'
 
 class GPPONNode extends EventEmitter {
@@ -15,49 +16,53 @@ class GPPONNode extends EventEmitter {
     this.peerId = null
     this.discoveredPeers = new Set()
     this.isRegistrar = config.isRegistrar || false
-    this.nodeType = config.isRegistrar ? 'Registrar' : 'Regular Node'
   }
 
   async start() {
-    const transports = [tcp()]
-    const muxers = [mplex()]
-    const connectionEncryption = [noise()]
-    const peerDiscovery = []
-    
-    if (this.config.enableMDNS) {
-      peerDiscovery.push(mdns())
-    }
-    
-    if (this.config.bootstrapList?.length) {
-      peerDiscovery.push(bootstrap({
-        list: this.config.bootstrapList
-      }))
-    }
-
     const options = {
       addresses: {
         listen: [`/ip4/127.0.0.1/tcp/${this.config.port}`]
       },
-      transports: transports,
-      streamMuxers: muxers,
-      connectionEncrypters: connectionEncryption,
-      peerDiscovery,
-      modules: {
-        dht: kadDHT
-      }
+      transports: [tcp()],
+      streamMuxers: [mplex()],
+      connectionEncrypters: [noise()],
+      services: {
+        identify: identify(),
+        dht: kadDHT({
+          clientMode: false, // Allow all nodes to participate in DHT
+          protocol: '/gppon/1.0.0',
+          initialStabilizeDelay: 1000,
+          queryDelay: 500,
+          enabled: true,
+          querySelfInterval: 1000,
+          randomWalk: {
+            enabled: true,
+            interval: 3000,
+            timeout: 1000
+          }
+        })
+      },
+      connectionManager: {
+        minConnections: 5
+      },
+      peerDiscovery: [
+        ...(this.config.bootstrapList?.length ? [bootstrap({
+          list: this.config.bootstrapList,
+          timeout: 5000
+        })] : []),
+        ...(this.config.enableMDNS ? [mdns()] : [])
+      ]
     }
 
     this.node = await createLibp2p(options)
     this.peerId = this.node.peerId.toString()
 
-    // Safely handle peer discovery events
     this.node.addEventListener('peer:discovery', (evt) => {
       try {
         if (evt?.detail?.id) {
           const peerId = evt.detail.id.toString()
           if (!this.discoveredPeers.has(peerId)) {
             this.discoveredPeers.add(peerId)
-            // console.log(`Node ${this.config.port}${this.isRegistrar ? ' (Registrar)' : ''} discovered peer: ${peerId}`)
             this.emit('peerDiscovered', peerId)
           }
         }
@@ -66,7 +71,6 @@ class GPPONNode extends EventEmitter {
       }
     })
 
-    // Safely handle peer connection events
     this.node.addEventListener('peer:connect', (evt) => {
       try {
         if (evt?.detail?.remotePeer) {
