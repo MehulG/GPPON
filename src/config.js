@@ -8,5 +8,9 @@ export const config = {
   baseRegistrarPort: parseInt(process.env.BASE_REGISTRAR_PORT),
   statusInterval: parseInt(process.env.STATUS_INTERVAL),
   enableMDNS: process.env.ENABLE_MDNS === 'true',
-  startupDelay: parseInt(process.env.STARTUP_DELAY)
+  startupDelay: parseInt(process.env.STARTUP_DELAY),
+  taskManager: {
+    maxTasks: parseInt(process.env.MAX_TASKS) || 10,
+    defaultTimeout: parseInt(process.env.TASK_TIMEOUT) || 3600
+  }
 }

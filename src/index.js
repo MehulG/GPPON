@@ -1,5 +1,7 @@
+// index.js
 import { setupNetwork } from './setup.js'
 import { config } from './config.js'
+import { createAndMonitorTask, TASK_CONFIGS } from './createTask.js'
 
 async function main() {
     let network = null
@@ -8,6 +10,24 @@ async function main() {
         network = await setupNetwork(config)
         console.log('Network setup complete')
 
+        // Wait a bit for the network to stabilize
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        // Get a non-registrar node to create tasks
+        const taskNode = network.nodes[0] // First non-registrar node
+
+        // Create example task
+        try {
+            const result = await createAndMonitorTask(
+                taskNode,
+                TASK_CONFIGS.nginxServer
+            )
+            console.log('Task execution completed:', result)
+        } catch (error) {
+            console.error('Task execution failed:', error)
+        }
+
+        // Setup cleanup
         process.on('SIGINT', async () => {
             console.log('\nShutting down GPPON network...')
             if (network) {
