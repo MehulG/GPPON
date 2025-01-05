@@ -1,10 +1,10 @@
-// TaskManager.js
 import { EventEmitter } from 'events'
 import { randomBytes } from 'crypto'
 import { pipe } from 'it-pipe'
 import * as uint8arrays from 'uint8arrays'
 import { pushable } from 'it-pushable'
 import all from 'it-all'
+import { peerIdFromString } from '@libp2p/peer-id';
 
 const TaskState = {
     PROPOSED: 'PROPOSED',
@@ -12,7 +12,8 @@ const TaskState = {
     RUNNING: 'RUNNING',
     COMPLETED: 'COMPLETED',
     FAILED: 'FAILED',
-    CANCELLED: 'CANCELLED'
+    CANCELLED: 'CANCELLED',
+    LOCKED: 'LOCKED' // New state for atomic locking
 }
 
 class TaskProposal {
@@ -39,6 +40,8 @@ class TaskProposal {
         this.state = TaskState.PROPOSED
         this.acceptedBy = null
         this.result = null
+        this.lockId = null
+        this.lockTimestamp = null
     }
 }
 
@@ -54,7 +57,8 @@ class TaskManager extends EventEmitter {
             bandwidth: 100,  // Default bandwidth (Mbps)
             storage: 100  // Default storage (GB)
         }
-
+        this.lockTimeout = 5000  // Lock timeout in ms
+        this.maxConcurrentTasks = 5
         this.setupProtocols()
     }
 
@@ -63,6 +67,8 @@ class TaskManager extends EventEmitter {
         this.node.node.handle('/gppon/task/accept/1.0.0', this.handleProtocol.bind(this, this.handleAcceptance.bind(this)))
         this.node.node.handle('/gppon/task/status/1.0.0', this.handleProtocol.bind(this, this.handleStatusUpdate.bind(this)))
         this.node.node.handle('/gppon/task/result/1.0.0', this.handleProtocol.bind(this, this.handleResult.bind(this)))
+        this.node.node.handle('/gppon/task/lock/1.0.0', this.handleProtocol.bind(this, this.handleLockRequest.bind(this)))
+        this.node.node.handle('/gppon/task/unlock/1.0.0', this.handleProtocol.bind(this, this.handleUnlockRequest.bind(this)))
     }
 
     async handleProtocol(handler, { connection, stream }) {
@@ -212,26 +218,308 @@ class TaskManager extends EventEmitter {
         }
     }
 
+    async handleLockRequest(message) {
+        const { proposalId, lockId } = message.payload
+        const proposal = this.proposals.get(proposalId)
+
+        if (!proposal) {
+            throw new Error('Proposal not found')
+        }
+
+        // Check if task is already locked
+        if (proposal.state === TaskState.LOCKED) {
+            // Check if lock has expired
+            if (Date.now() - proposal.lockTimestamp > this.lockTimeout) {
+                // Lock has expired, allow new lock
+                proposal.lockId = lockId
+                proposal.lockTimestamp = Date.now()
+                proposal.state = TaskState.LOCKED
+                return { success: true, lockId }
+            }
+            return { success: false, reason: 'Task is locked' }
+        }
+
+        // Check if task is available
+        if (proposal.state !== TaskState.PROPOSED) {
+            return { success: false, reason: 'Task is not available' }
+        }
+
+        // Lock the task
+        proposal.lockId = lockId
+        proposal.lockTimestamp = Date.now()
+        proposal.state = TaskState.LOCKED
+ 
+        return { success: true, lockId }
+    }
+
+    async handleUnlockRequest(message) {
+        const { proposalId, lockId } = message.payload
+        const proposal = this.proposals.get(proposalId)
+
+        if (!proposal) {
+            throw new Error('Proposal not found')
+        }
+
+        if (proposal.lockId !== lockId) {
+            return { success: false, reason: 'Invalid lock ID' }
+        }
+
+        // Reset lock
+        proposal.lockId = null
+        proposal.lockTimestamp = null
+        proposal.state = TaskState.PROPOSED
+
+        return { success: true }
+    }
+
+    async acquireLock(proposalId) {
+        const lockId = randomBytes(16).toString('hex')
+
+        try {
+            const proposal = this.proposals.get(proposalId)
+            if (!proposal) {
+                throw new Error('Proposal not found')
+            }
+
+            // Convert string to proper PeerId
+            let proposerPeerId;
+            try {
+                proposerPeerId = peerIdFromString(proposal.proposerId)
+            } catch (error) {
+                console.error('Error creating PeerId:', error)
+                return null
+            }
+
+            const message = {
+                type: 'LOCK_REQUEST',
+                payload: { proposalId, lockId }
+            }
+
+            try {
+                const stream = await this.node.node.dialProtocol(proposerPeerId, '/gppon/task/lock/1.0.0')
+
+                await pipe(
+                    [uint8arrays.fromString(JSON.stringify(message))],
+                    stream.sink
+                )
+
+                let responseData = new Uint8Array()
+                for await (const chunk of stream.source) {
+                    const chunkArray = new Uint8Array(chunk.subarray())
+                    const newData = new Uint8Array(responseData.length + chunkArray.length)
+                    newData.set(responseData)
+                    newData.set(chunkArray, responseData.length)
+                    responseData = newData
+                }
+
+                const response = JSON.parse(new TextDecoder().decode(responseData))
+                return response.success ? lockId : null
+
+            } catch (error) {
+                console.error('Error in lock request:', error)
+                return null
+            }
+
+        } catch (error) {
+            console.error('Error acquiring lock:', error)
+            return null
+        }
+    }
+
+
+
+    async releaseLock(proposalId, lockId) {
+        try {
+            const proposal = this.proposals.get(proposalId)
+            if (!proposal) {
+                throw new Error('Proposal not found')
+            }
+
+            // Convert string to proper PeerId
+            let proposerPeerId;
+            try {
+                proposerPeerId = peerIdFromString(proposal.proposerId)
+            } catch (error) {
+                console.error('Error creating PeerId:', error)
+                return
+            }
+
+            const message = {
+                type: 'UNLOCK_REQUEST',
+                payload: { proposalId, lockId }
+            }
+
+            const stream = await this.node.node.dialProtocol(proposerPeerId, '/gppon/task/unlock/1.0.0')
+            await pipe(
+                [uint8arrays.fromString(JSON.stringify(message))],
+                stream.sink
+            )
+
+        } catch (error) {
+            console.error('Error releasing lock:', error)
+        }
+    }
+
+
+    async acceptProposal(proposalId) {
+        const proposal = this.proposals.get(proposalId)
+        if (!proposal || proposal.state !== TaskState.PROPOSED) {
+            throw new Error('Invalid proposal or proposal already accepted')
+        }
+
+        // Try to acquire lock
+        const lockId = await this.acquireLock(proposalId)
+        if (!lockId) {
+            throw new Error('Failed to acquire lock for proposal')
+        }
+
+        try {
+            proposal.state = TaskState.ACCEPTED
+            proposal.acceptedBy = this.node.peerId.toString()
+
+            const message = {
+                type: 'TASK_ACCEPTANCE',
+                payload: {
+                    proposalId,
+                    acceptedBy: this.node.peerId.toString(),
+                    timestamp: Date.now()
+                }
+            }
+
+            const stream = await this.node.node.dialProtocol(proposal.proposerId, '/gppon/task/accept/1.0.0')
+            await pipe(
+                [uint8arrays.fromString(JSON.stringify(message))],
+                stream.sink
+            )
+
+            // Start task execution
+            await this.startTask(proposal)
+
+        } catch (error) {
+            console.error('Error accepting proposal:', error)
+            proposal.state = TaskState.PROPOSED
+            proposal.acceptedBy = null
+            // Release lock in case of failure
+            await this.releaseLock(proposalId, lockId)
+            throw error
+        }
+    }
+
+    async attemptAcceptProposal(proposalId) {
+        const proposal = this.proposals.get(proposalId)
+
+        // Double check state before attempting to accept
+        if (!proposal || proposal.state !== TaskState.PROPOSED) {
+            return false;
+        }
+
+        try {
+            // Try to acquire lock first
+            const lockId = await this.acquireLock(proposalId)
+            if (!lockId) {
+                return false;
+            }
+
+            // Double check state again after acquiring lock
+            if (proposal.state !== TaskState.PROPOSED) {
+                await this.releaseLock(proposalId, lockId)
+                return false;
+            }
+
+            // Update state immediately to prevent race conditions
+            proposal.state = TaskState.ACCEPTED
+            proposal.acceptedBy = this.node.peerId.toString()
+
+            try {
+                // Convert proposer ID to proper PeerId for acceptance message
+                const proposerPeerId = peerIdFromString(proposal.proposerId)
+
+                const message = {
+                    type: 'TASK_ACCEPTANCE',
+                    payload: {
+                        proposalId,
+                        acceptedBy: this.node.peerId.toString(),
+                        timestamp: Date.now()
+                    }
+                }
+
+                // Notify proposer
+                const stream = await this.node.node.dialProtocol(proposerPeerId, '/gppon/task/accept/1.0.0')
+                await pipe(
+                    [uint8arrays.fromString(JSON.stringify(message))],
+                    stream.sink
+                )
+
+                // Start task execution
+                await this.startTask(proposal)
+                return true;
+
+            } catch (error) {
+                console.error('Error in task acceptance:', error)
+                // Reset state on failure
+                proposal.state = TaskState.PROPOSED
+                proposal.acceptedBy = null
+                await this.releaseLock(proposalId, lockId)
+                return false;
+            }
+
+        } catch (error) {
+            console.error('Error in attemptAcceptProposal:', error)
+            // Reset state on failure
+            if (proposal) {
+                proposal.state = TaskState.PROPOSED
+                proposal.acceptedBy = null
+            }
+            return false;
+        }
+    }
+
+
+    async acceptProposal(proposalId) {
+        const success = await this.attemptAcceptProposal(proposalId);
+        if (!success) {
+            throw new Error('Failed to accept proposal - may have already been accepted');
+        }
+    }
+
     async handleProposal(message) {
         try {
             if (!message || !message.payload) {
                 throw new Error('Invalid proposal message')
             }
-    
+
             const proposal = message.payload
-            
+
             // Validate the proposal format
             if (!proposal.id || !proposal.proposerId || !proposal.containerConfig) {
                 throw new Error('Invalid proposal format')
             }
-            
+
+            // Store proposerId as string
+            if (typeof proposal.proposerId !== 'string') {
+                proposal.proposerId = proposal.proposerId.toString()
+            }
+
             // Store the proposal
             this.proposals.set(proposal.id, proposal)
-            
+
             // Emit event for proposal received
             this.emit('proposalReceived', proposal)
-            
-            // Return success response
+
+            // Only attempt to accept if we meet requirements
+            if (this.canHandleTask(proposal)) {
+                setTimeout(async () => {
+                    try {
+                        // Add a small random delay to help prevent race conditions
+                        await new Promise(resolve => setTimeout(resolve, Math.random() * 1000));
+                        await this.attemptAcceptProposal(proposal.id);
+                    } catch (error) {
+                        // Silently handle acceptance failures as other nodes may have accepted
+                        console.log(`Failed to accept proposal ${proposal.id}: ${error.message}`);
+                    }
+                }, 0);
+            }
+
             return {
                 proposalId: proposal.id,
                 received: true,
@@ -242,49 +530,14 @@ class TaskManager extends EventEmitter {
             throw error
         }
     }
-
     canHandleTask(proposal) {
         return (
             this.capabilities.cpu >= proposal.requirements.cpu &&
             this.capabilities.memory >= proposal.requirements.memory &&
             this.capabilities.bandwidth >= proposal.requirements.bandwidth &&
-            this.capabilities.storage >= proposal.requirements.storage
+            this.capabilities.storage >= proposal.requirements.storage &&
+            this.activeTasks.size < (this.maxConcurrentTasks || 5)
         )
-    }
-
-    async acceptProposal(proposalId) {
-        const proposal = this.proposals.get(proposalId)
-        if (!proposal || proposal.state !== TaskState.PROPOSED) {
-            throw new Error('Invalid proposal or proposal already accepted')
-        }
-
-        proposal.state = TaskState.ACCEPTED
-        proposal.acceptedBy = this.node.peerId.toString()
-
-        const message = {
-            type: 'TASK_ACCEPTANCE',
-            payload: {
-                proposalId,
-                acceptedBy: this.node.peerId.toString(),
-                timestamp: Date.now()
-            }
-        }
-
-        try {
-            const stream = await this.node.node.dialProtocol(proposal.proposerId, '/gppon/task/accept/1.0.0')
-            await pipe(
-                [uint8arrays.fromString(JSON.stringify(message))],
-                stream.sink
-            )
-
-            // Start task execution
-            await this.startTask(proposal)
-        } catch (error) {
-            console.error('Error accepting proposal:', error)
-            proposal.state = TaskState.PROPOSED
-            proposal.acceptedBy = null
-            throw error
-        }
     }
 
     async handleAcceptance(message) {
