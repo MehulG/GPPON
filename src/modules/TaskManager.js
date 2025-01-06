@@ -306,7 +306,7 @@ class TaskManager extends EventEmitter {
                     console.log(`Node ${this.node.config.port}: Successfully acquired lock for proposal ${proposalId}`)
                     return response.result.lockId
                 } else {
-                    console.log(`Node ${this.node.config.port}: Failed to acquire lock for proposal ${proposalId}: ${response.reason}`)
+                    console.log(`Node ${this.node.config.port}: Failed to acquire lock for proposal ${proposalId}: ${response.result.reason}`)
                     return null
                 }
 
@@ -655,7 +655,7 @@ class TaskManager extends EventEmitter {
                 let proposerPeerId;
                 try {
                     proposerPeerId = peerIdFromString(proposal.proposerId)
-                    console.log(`Node ${this.node.config.port}: Attempting to send result for proposal ${proposal.proposalId}`)
+                    console.log(`Node ${this.node.config.port}: Attempting to send result for proposal ${proposal.id}`)
                 } catch (error) {
                     console.error('Error creating PeerId:', error)
                     return null
