@@ -596,6 +596,11 @@ class TaskManager extends EventEmitter {
             )
             console.log(`Node ${this.node.config.port}: Starting task execution for proposal ${proposal.id}`)
 
+            // Simulate task execution with a delay
+            await new Promise(resolve => setTimeout(resolve, 10000));
+
+            // After 10 seconds, mark the task as completed
+            await this.completeTask(proposal.id, { success: true });
         } catch (error) {
 
         }
@@ -606,12 +611,11 @@ class TaskManager extends EventEmitter {
 
         try {
             const { taskId, status, progress } = message.payload
-
-            const task = this.activeTasks.get(taskId)
-            console.log(task);
+            const task = this.proposals.get(taskId);
+            console.log(`task: ${JSON.stringify(task, null, 2)}`);
 
             if (task) {
-                task.status = status
+                task.state = status
                 task.progress = progress
 
                 this.emit('taskStatusUpdated', {
@@ -633,6 +637,9 @@ class TaskManager extends EventEmitter {
             proposal.state = TaskState.COMPLETED
             proposal.result = result
 
+            console.log(`Node ${this.node.config.port}: Task ${taskId} completed with result: ${JSON.stringify(result)}`);
+            
+
             const message = {
                 type: 'TASK_RESULT',
                 payload: {
@@ -643,7 +650,18 @@ class TaskManager extends EventEmitter {
             }
 
             try {
-                const stream = await this.node.node.dialProtocol(proposal.proposerId, '/gppon/task/result/1.0.0')
+                console.log('proposal.proposerId', proposal.proposerId);
+
+                let proposerPeerId;
+                try {
+                    proposerPeerId = peerIdFromString(proposal.proposerId)
+                    console.log(`Node ${this.node.config.port}: Attempting to send result for proposal ${proposal.proposalId}`)
+                } catch (error) {
+                    console.error('Error creating PeerId:', error)
+                    return null
+                }
+    
+                const stream = await this.node.node.dialProtocol(proposerPeerId, TASK_PROTOCOLS.RESULT)
                 await pipe(
                     [uint8arrays.fromString(JSON.stringify(message))],
                     stream.sink
@@ -663,7 +681,7 @@ class TaskManager extends EventEmitter {
         }
     }
 
-    async handleResult(message) {
+    async handleResult(message) {        
         try {
             const { proposalId, result } = message.payload
 
