@@ -1,22 +1,39 @@
 import json
 import os
 import subprocess
-
+import sys
 # Sample generalized JSON input
-json_input = """
-{
-    "dataProcess": {
-        "image": "python:3.9",
-        "command": ["python", "app.py"],
-        "cpu": 2,
-        "memory": 4096,
-        "env": {
-            "INPUT_FILE": "data.csv",
-            "OUTPUT_FILE": "results.csv"
-        }
-    }
-}
-"""
+# json_input = """
+# {
+#     "dataProcess": {
+#         "image": "python:3.9",
+#         "command": ["python", "app.py"],
+#         "cpu": 2,
+#         "memory": 4096,
+#         "env": {
+#             "INPUT_FILE": "data.csv",
+#             "OUTPUT_FILE": "results.csv"
+#         }
+#     }
+# }
+# """
+
+if len(sys.argv) > 1:
+        # If JSON input is provided as a command-line argument
+        json_input = sys.argv[1]
+else:
+    print("Error: JSON input is required as an argument.")
+    sys.exit(1)
+
+try:
+    config = json.loads(json_input)
+    print("Parsed JSON input:", json.dumps(config, indent=4))
+except json.JSONDecodeError as e:
+    print(f"Invalid JSON input: {e}")
+    sys.exit(1)
+
+# Example: Access and print the parsed JSON content
+print("Parsed JSON input:", json.dumps(config, indent=4))
 
 # Parse JSON
 config = json.loads(json_input)

@@ -6,6 +6,7 @@ import { peerIdFromString } from '@libp2p/peer-id';
 import { TaskState } from './states/taskState.js'
 import { TaskProposal } from './proposals/taskProposal.js'
 import { TASK_PROTOCOLS } from './protocols/taskProtocols.js';
+import runDocker from './run_docker.js';
 
 class TaskManager extends EventEmitter {
     constructor(node) {
@@ -597,7 +598,8 @@ class TaskManager extends EventEmitter {
             console.log(`Node ${this.node.config.port}: Starting task execution for proposal ${proposal.id}`)
 
             // Simulate task execution with a delay
-            await new Promise(resolve => setTimeout(resolve, 10000));
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            await runDocker(proposal);
 
             // After 10 seconds, mark the task as completed
             await this.completeTask(proposal.id, { success: true });
