@@ -15,8 +15,8 @@ async function main() {
 
         // Get a non-registrar node to create tasks
         const taskNode = network.nodes[0] // First non-registrar node
+        console.log(taskNode.peerId);
 
-        // Create example task
         try {
             const result = await createAndMonitorTask(
                 taskNode,
