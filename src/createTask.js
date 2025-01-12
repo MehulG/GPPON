@@ -111,7 +111,7 @@ export const TASK_CONFIGS = {
     // Data processing task
     dataProcess: {
         image: 'python:3.9',
-        command: ['python', 'process_data.py'],
+        command: ['python', 'app.py'],
         cpu: 2,
         memory: 4096,
         env: {
