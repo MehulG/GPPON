@@ -7,6 +7,8 @@ import { TaskState } from './states/taskState.js'
 import { TaskProposal } from './proposals/taskProposal.js'
 import { TASK_PROTOCOLS } from './protocols/taskProtocols.js';
 import runDocker from './run_docker.js';
+import { handleAcceptance, handleProposal, handleLockRequest, handleProtocol, handleResult, handleStatusUpdate, handleUnlockRequest } from './HandleProposal.js';
+import { TaskUtility } from './TaskUtility.js';
 
 class TaskManager extends EventEmitter {
     constructor(node) {
@@ -26,70 +28,12 @@ class TaskManager extends EventEmitter {
     }
 
     async setupProtocols() {
-        this.node.node.handle('/gppon/task/propose/1.0.0', this.handleProtocol.bind(this, this.handleProposal.bind(this)))
-        this.node.node.handle('/gppon/task/accept/1.0.0', this.handleProtocol.bind(this, this.handleAcceptance.bind(this)))
-        this.node.node.handle('/gppon/task/status/1.0.0', this.handleProtocol.bind(this, this.handleStatusUpdate.bind(this)))
-        this.node.node.handle('/gppon/task/result/1.0.0', this.handleProtocol.bind(this, this.handleResult.bind(this)))
-        this.node.node.handle('/gppon/task/lock/1.0.0', this.handleProtocol.bind(this, this.handleLockRequest.bind(this)))
-        this.node.node.handle('/gppon/task/unlock/1.0.0', this.handleProtocol.bind(this, this.handleUnlockRequest.bind(this)))
-    }
-
-    async handleProtocol(handler, { connection, stream }) {
-        try {
-            // Collect chunks from the stream
-            let data = new Uint8Array()
-            for await (const chunk of stream.source) {
-                // Convert Uint8ArrayList to Uint8Array
-                const chunkArray = new Uint8Array(chunk.subarray())
-                // Combine with existing data
-                const newData = new Uint8Array(data.length + chunkArray.length)
-                newData.set(data)
-                newData.set(chunkArray, data.length)
-                data = newData
-            }
-
-            // Only process if we have data
-            if (data.length > 0) {
-                // Convert to string and parse
-                const messageStr = new TextDecoder().decode(data)
-                const message = JSON.parse(messageStr)
-
-                // Handle the message
-                const result = await handler(message)
-
-                // Send response
-                const response = {
-                    status: 'ok',
-                    result,
-                    timestamp: Date.now()
-                }
-
-                const responseData = new TextEncoder().encode(JSON.stringify(response))
-                await pipe([responseData], stream.sink)
-            } else {
-                // Handle empty stream case
-                const errorResponse = {
-                    status: 'error',
-                    message: 'No data received',
-                    timestamp: Date.now()
-                }
-                const responseData = new TextEncoder().encode(JSON.stringify(errorResponse))
-                await pipe([responseData], stream.sink)
-            }
-        } catch (error) {
-            console.error('Error in protocol handler:', error)
-            try {
-                const errorResponse = {
-                    status: 'error',
-                    message: error.message,
-                    timestamp: Date.now()
-                }
-                const responseData = new TextEncoder().encode(JSON.stringify(errorResponse))
-                await pipe([responseData], stream.sink)
-            } catch (e) {
-                console.error('Error sending error response:', e)
-            }
-        }
+        this.node.node.handle('/gppon/task/propose/1.0.0', handleProtocol.bind(this, handleProposal.bind(this)))
+        this.node.node.handle('/gppon/task/accept/1.0.0', handleProtocol.bind(this, handleAcceptance.bind(this)))
+        this.node.node.handle('/gppon/task/status/1.0.0', handleProtocol.bind(this, handleStatusUpdate.bind(this)))
+        this.node.node.handle('/gppon/task/result/1.0.0', handleProtocol.bind(this, handleResult.bind(this)))
+        this.node.node.handle('/gppon/task/lock/1.0.0', handleProtocol.bind(this, handleLockRequest.bind(this)))
+        this.node.node.handle('/gppon/task/unlock/1.0.0', handleProtocol.bind(this, handleUnlockRequest.bind(this)))
     }
 
     async broadcastProposal(proposal) {
@@ -182,81 +126,6 @@ class TaskManager extends EventEmitter {
         }
     }
 
-    async handleLockRequest(message) {
-        const { proposalId, lockId, requesterId } = message.payload
-        const proposal = this.proposals.get(proposalId)
-
-        try {
-            if (!proposal) {
-                console.log(`Node ${this.node.config.port}: Lock request denied - proposal ${proposalId} not found`)
-                return { success: false, reason: 'Proposal not found', lockId: null }
-            }
-
-            // Prevent proposer from locking their own proposal
-            if (requesterId === proposal.proposerId) {
-                console.log(`Node ${this.node.config.port}: Lock denied - proposer cannot lock their own task`)
-                return { success: false, reason: 'Proposer cannot lock their own task', lockId: null }
-            }
-
-            // Check if task is already locked
-            if (proposal.state === TaskState.LOCKED) {
-                // Check if lock has expired
-                if (Date.now() - proposal.lockTimestamp > this.lockTimeout) {
-                    // Lock has expired, allow new lock
-                    proposal.lockId = lockId
-                    proposal.lockTimestamp = Date.now()
-                    proposal.state = TaskState.LOCKED
-                    proposal.lockedBy = requesterId
-                    console.log(`Node ${this.node.config.port}: Lock expired for proposal ${proposalId}. New lock acquired by ${proposal.lockedBy}`)
-                    return { success: true, reason: 'Lock acquired', lockId }
-                }
-                console.log(`Node ${this.node.config.port}: Lock request denied - proposal ${proposalId} is locked by ${proposal.lockedBy}`)
-                return { success: false, reason: 'Task is locked', lockId: null }
-            }
-
-            // Check if task is available
-            if (proposal.state !== TaskState.PROPOSED) {
-                console.log(`Node ${this.node.config.port}: Lock request denied - proposal ${proposalId} is in ${proposal.state} state`)
-                return { success: false, reason: 'Task is not available', lockId: null }
-            }
-
-            // Lock the task
-            proposal.lockId = lockId
-            proposal.lockTimestamp = Date.now()
-            proposal.state = TaskState.LOCKED
-            proposal.lockedBy = requesterId
-
-            console.log(`Node ${this.node.config.port}: Lock acquired for proposal ${proposalId} by ${proposal.lockedBy}`)
-            return { success: true, reason: 'Lock acquired', lockId }
-        } catch (error) {
-            console.error(`Node ${this.node.config.port}: Error in handleLockRequest:`, error)
-            return { success: false, reason: error.message, lockId: null }
-        }
-    }
-
-    async handleUnlockRequest(message) {
-        const { proposalId, lockId } = message.payload
-        const proposal = this.proposals.get(proposalId)
-
-        if (!proposal) {
-            throw new Error('Proposal not found')
-        }
-
-        if (proposal.lockId !== lockId) {
-            console.log(`Node ${this.node.config.port}: Invalid unlock attempt for proposal ${proposalId} by ${this.node.peerId.toString()}`)
-            return { success: false, reason: 'Invalid lock ID' }
-        }
-
-        // Reset lock
-        const previousLocker = proposal.lockedBy
-        proposal.lockId = null
-        proposal.lockTimestamp = null
-        proposal.state = TaskState.PROPOSED
-        proposal.lockedBy = null
-
-        console.log(`Node ${this.node.config.port}: Lock released for proposal ${proposalId} (was locked by ${previousLocker})`)
-        return { success: true }
-    }
 
     async acquireLock(proposalId) {
         const lockId = randomBytes(16).toString('hex')
@@ -352,54 +221,6 @@ class TaskManager extends EventEmitter {
             console.error('Error releasing lock:', error)
         }
     }
-
-    // async acceptProposal(proposalId) {
-    //     const proposal = this.proposals.get(proposalId)
-    //     if (!proposal || proposal.state !== TaskState.PROPOSED) {
-    //         throw new Error('Invalid proposal or proposal already accepted')
-    //     }
-
-    //     // Try to acquire lock
-    //     const lockId = await this.acquireLock(proposalId)
-    //     if (!lockId) {
-    //         throw new Error('Failed to acquire lock for proposal')
-    //     }
-    //     //-----------------------------------------------------------
-    //     try {
-    //         proposal.state = TaskState.ACCEPTED
-    //         proposal.acceptedBy = this.node.peerId.toString()
-
-    //         const message = {
-    //             type: 'TASK_ACCEPTANCE',
-    //             payload: {
-    //                 proposalId,
-    //                 acceptedBy: this.node.peerId.toString(),
-    //                 timestamp: Date.now()
-    //             }
-    //         }
-
-    //         const stream = await this.node.node.dialProtocol(proposal.proposerId, '/gppon/task/accept/1.0.0')
-    //         await pipe(
-    //             [uint8arrays.fromString(JSON.stringify(message))],
-    //             stream.sink
-    //         )
-
-    //         // Start task execution
-    //         await this.startTask(proposal)
-
-    //     } catch (error) {
-    //         console.error('Error accepting proposal:', error)
-    //         proposal.state = TaskState.PROPOSED
-    //         proposal.acceptedBy = null
-    //         // Release lock in case of failure
-    //         await this.releaseLock(proposalId, lockId)
-    //         throw error
-    //     }
-    // }
-
-    //todo -> remove redundant methods
-    // accept proposal -> acquire lock -> recieve confrmarion -> send acceptance -> start task
-    // make a protocol for task acceptance, send from handleProposal, recieve in processAcceptance
     async processAcceptance(message) { }
 
     async attemptAcceptProposal(proposalId) {
@@ -483,59 +304,6 @@ class TaskManager extends EventEmitter {
         }
     }
 
-    async handleProposal(message) {
-        try {
-            if (!message || !message.payload) {
-                throw new Error('Invalid proposal message')
-            }
-
-            const proposal = message.payload
-
-            // Validate the proposal format
-            if (!proposal.id || !proposal.proposerId || !proposal.containerConfig) {
-                throw new Error('Invalid proposal format')
-            }
-
-            // Ensure we're not trying to handle our own proposal
-            if (proposal.proposerId === this.node.peerId.toString()) {
-                console.log(`Node ${this.node.config.port}: Ignoring own proposal ${proposal.id}`)
-                return {
-                    proposalId: proposal.id,
-                    received: true,
-                    timestamp: Date.now()
-                }
-            }
-
-            // Store the proposal
-            this.proposals.set(proposal.id, proposal)
-
-            // Emit event for proposal received
-            this.emit('proposalReceived', proposal)
-
-            // Only attempt to accept if we meet requirements
-            if (this.canHandleTask(proposal)) {
-                setTimeout(async () => {
-                    try {
-                        // Add a small random delay to help prevent race conditions
-                        await new Promise(resolve => setTimeout(resolve, Math.random() * 1000));
-                        await this.attemptAcceptProposal(proposal.id);
-                    } catch (error) {
-                        console.log(`Failed to accept proposal ${proposal.id}: ${error.message}`);
-                    }
-                }, 0);
-            }
-
-            return {
-                proposalId: proposal.id,
-                received: true,
-                timestamp: Date.now()
-            }
-        } catch (error) {
-            console.error('Error handling proposal:', error)
-            throw error
-        }
-    }
-
     canHandleTask(proposal) {
         return (
             this.capabilities.cpu >= proposal.requirements.cpu &&
@@ -546,26 +314,6 @@ class TaskManager extends EventEmitter {
         )
     }
 
-    async handleAcceptance(message) {
-        try {
-            const { proposalId, acceptedBy } = message.payload
-
-            const proposal = this.proposals.get(proposalId)
-            if (proposal && proposal.state === TaskState.LOCKED) {
-                proposal.state = TaskState.ACCEPTED
-                proposal.acceptedBy = acceptedBy
-
-                this.emit('proposalAccepted', {
-                    proposalId,
-                    acceptedBy,
-                    timestamp: Date.now()
-                })
-            }
-        } catch (error) {
-            console.error('Error handling acceptance:', error)
-            throw error
-        }
-    }
 
     async startTask(proposal) {
         let proposerPeerId
@@ -601,37 +349,12 @@ class TaskManager extends EventEmitter {
             await new Promise(resolve => setTimeout(resolve, 1000));
             await runDocker(proposal);
 
-            // After 10 seconds, mark the task as completed
             await this.completeTask(proposal.id, { success: true });
         } catch (error) {
 
         }
     }
 
-    async handleStatusUpdate(message) {
-        console.log('handleStatusUpdate');
-
-        try {
-            const { taskId, status, progress } = message.payload
-            const task = this.proposals.get(taskId);
-            console.log(`task: ${JSON.stringify(task, null, 2)}`);
-
-            if (task) {
-                task.state = status
-                task.progress = progress
-
-                this.emit('taskStatusUpdated', {
-                    taskId,
-                    status,
-                    progress,
-                    timestamp: Date.now()
-                })
-            }
-        } catch (error) {
-            console.error('Error handling status update:', error)
-            throw error
-        }
-    }
 
     async completeTask(taskId, result) {
         const proposal = this.proposals.get(taskId)
@@ -683,55 +406,38 @@ class TaskManager extends EventEmitter {
         }
     }
 
-    async handleResult(message) {        
-        try {
-            const { proposalId, result } = message.payload
-
-            const proposal = this.proposals.get(proposalId)
-            if (proposal) {
-                proposal.state = TaskState.COMPLETED
-                proposal.result = result
-
-                this.emit('taskCompleted', {
-                    proposalId,
-                    result,
-                    timestamp: Date.now()
-                })
-            }
-        } catch (error) {
-            console.error('Error handling result:', error)
-            throw error
-        }
-    }
-
     // Utility methods
     getProposalsByState(state) {
-        return Array.from(this.proposals.values())
-            .filter(proposal => proposal.state === state)
+        return TaskUtility.getProposalsByState(this.proposals, state)
     }
-
+    
     getActiveTasks() {
-        return Array.from(this.activeTasks.values())
+        return TaskUtility.getActiveTasks(this.activeTasks)
     }
-
+    
     updateCapabilities(capabilities) {
-        this.capabilities = {
-            ...this.capabilities,
-            ...capabilities
-        }
+        this.capabilities = TaskUtility.updateCapabilities(this.capabilities, capabilities)
     }
-
+    
     async cancelProposal(proposalId) {
         const proposal = this.proposals.get(proposalId)
-        if (proposal && proposal.state !== TaskState.COMPLETED) {
-            proposal.state = TaskState.CANCELLED
+        const cancelled = await TaskUtility.cancelProposal(proposal)
+        if (cancelled) {
             this.emit('proposalCancelled', {
                 proposalId,
                 timestamp: Date.now()
             })
-            return true
         }
-        return false
+        return cancelled
+    }
+    
+    canHandleTask(proposal) {
+        return TaskUtility.canHandleTask(
+            this.capabilities, 
+            proposal, 
+            this.activeTasks, 
+            this.maxConcurrentTasks
+        )
     }
 }
 
