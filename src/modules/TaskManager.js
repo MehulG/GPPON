@@ -7,7 +7,7 @@ import { TaskState } from './states/taskState.js'
 import { TaskProposal } from './proposals/taskProposal.js'
 import { TASK_PROTOCOLS } from './protocols/taskProtocols.js';
 import runDocker from './run_docker.js';
-import { handleAcceptance, handleProposal, handleLockRequest, handleProtocol, handleResult, handleStatusUpdate, handleUnlockRequest } from './HandleProposal.js';
+import { handleAcceptance, handleProposal, handleLockRequest, handleProtocol, handleResult, handleStatusUpdate, handleUnlockRequest, handleFileReception } from './HandleProposal.js';
 import { TaskUtility } from './TaskUtility.js';
 
 class TaskManager extends EventEmitter {
@@ -34,6 +34,7 @@ class TaskManager extends EventEmitter {
         this.node.node.handle('/gppon/task/result/1.0.0', handleProtocol.bind(this, handleResult.bind(this)))
         this.node.node.handle('/gppon/task/lock/1.0.0', handleProtocol.bind(this, handleLockRequest.bind(this)))
         this.node.node.handle('/gppon/task/unlock/1.0.0', handleProtocol.bind(this, handleUnlockRequest.bind(this)))
+        this.node.node.handle('/gppon/task/file/1.0.0', handleProtocol.bind(this, handleFileReception.bind(this)))
     }
 
     async broadcastProposal(proposal) {

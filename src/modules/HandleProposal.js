@@ -1,60 +1,69 @@
 import { pipe } from 'it-pipe'
 import { TaskState } from './states/taskState.js'
+import fs from 'fs';
+import { peerIdFromString } from '@libp2p/peer-id';
 
 export async function handleProtocol(handler, { connection, stream }) {
     try {
         // Collect chunks from the stream
-        let data = new Uint8Array()
+        let data = new Uint8Array();
         for await (const chunk of stream.source) {
             // Convert Uint8ArrayList to Uint8Array
-            const chunkArray = new Uint8Array(chunk.subarray())
+            const chunkArray = new Uint8Array(chunk.subarray());
             // Combine with existing data
-            const newData = new Uint8Array(data.length + chunkArray.length)
-            newData.set(data)
-            newData.set(chunkArray, data.length)
-            data = newData
+            const newData = new Uint8Array(data.length + chunkArray.length);
+            newData.set(data);
+            newData.set(chunkArray, data.length);
+            data = newData;
         }
 
         // Only process if we have data
         if (data.length > 0) {
-            // Convert to string and parse
-            const messageStr = new TextDecoder().decode(data)
-            const message = JSON.parse(messageStr)
+            // Check if the data is JSON or binary
+            const isJson = data[0] === 123; // 123 is the ASCII code for '{'
+            if (isJson) {
+                // Convert to string and parse
+                const messageStr = new TextDecoder().decode(data);
+                const message = JSON.parse(messageStr);
 
-            // Handle the message
-            const result = await handler(message)
+                // Handle the message
+                const result = await handler(message);
 
-            // Send response
-            const response = {
-                status: 'ok',
-                result,
-                timestamp: Date.now()
+                // Send response
+                const response = {
+                    status: 'ok',
+                    result,
+                    timestamp: Date.now()
+                };
+
+                const responseData = new TextEncoder().encode(JSON.stringify(response));
+                await pipe([responseData], stream.sink);
+            } else {
+                // Handle binary data (e.g., file data)
+                await handler({ stream });
             }
-
-            const responseData = new TextEncoder().encode(JSON.stringify(response))
-            await pipe([responseData], stream.sink)
         } else {
             // Handle empty stream case
             const errorResponse = {
                 status: 'error',
                 message: 'No data received',
                 timestamp: Date.now()
-            }
-            const responseData = new TextEncoder().encode(JSON.stringify(errorResponse))
-            await pipe([responseData], stream.sink)
+            };
+            const responseData = new TextEncoder().encode(JSON.stringify(errorResponse));
+            await pipe([responseData], stream.sink);
         }
     } catch (error) {
-        console.error('Error in protocol handler:', error)
+        console.error('Error in protocol handler:', error);
         try {
             const errorResponse = {
                 status: 'error',
                 message: error.message,
                 timestamp: Date.now()
-            }
-            const responseData = new TextEncoder().encode(JSON.stringify(errorResponse))
-            await pipe([responseData], stream.sink)
+            };
+            const responseData = new TextEncoder().encode(JSON.stringify(errorResponse));
+            await pipe([responseData], stream.sink);
         } catch (e) {
-            console.error('Error sending error response:', e)
+            console.error('Error sending error response:', e);
         }
     }
 }
@@ -190,22 +199,67 @@ export async function handleProposal(message) {
 
 export async function handleAcceptance(message) {
     try {
-        const { proposalId, acceptedBy } = message.payload
+        const { proposalId, acceptedBy } = message.payload;
 
-        const proposal = this.proposals.get(proposalId)
+        const proposal = this.proposals.get(proposalId);
         if (proposal && proposal.state === TaskState.LOCKED) {
-            proposal.state = TaskState.ACCEPTED
-            proposal.acceptedBy = acceptedBy
+            proposal.state = TaskState.ACCEPTED;
+            proposal.acceptedBy = acceptedBy;
 
-            this.emit('proposalAccepted', {
-                proposalId,
-                acceptedBy,
-                timestamp: Date.now()
-            })
+            // Send data.mp4 to acceptedBy
+            const filePath = '/home/badass/Documents/GPPON/GPPON/src/1MB.mp4';
+            await streamFile.call(this, filePath, acceptedBy);
         }
     } catch (error) {
-        console.error('Error handling acceptance:', error)
-        throw error
+        console.error('Error handling acceptance:', error);
+        throw error;
+    }
+}
+
+async function streamFile(filePath, acceptedBy) {
+    try {
+        const fileStream = fs.createReadStream(filePath);
+        const peerStream = await this.node.node.dialProtocol(
+            peerIdFromString(acceptedBy),
+            '/gppon/task/file/1.0.0'
+        );
+
+        // Use pipe() to handle the streaming
+        await pipe(
+            fileStream,
+            // Optional transform to log chunks
+            async function* (source) {
+                for await (const chunk of source) {
+                    console.log(`Sending chunk: ${chunk.length} bytes`);
+                    yield chunk;
+                }
+            },
+            peerStream.sink
+        );
+
+        // The pipe() function will handle closing the stream properly
+    } catch (error) {
+        console.error('Error streaming file:', error);
+        throw error;
+    }
+}
+
+export async function handleFileReception({ stream }) {
+    const filePath = './received.mp4';
+    const fileWriteStream = fs.createWriteStream(filePath);
+
+    try {
+        // Collect chunks from the stream and write to file
+        for await (const chunk of stream.source) {
+            console.log(`Received chunk: ${chunk.length} bytes`);
+            fileWriteStream.write(chunk);
+        }
+
+        console.log(`File received and saved to ${filePath}`);
+    } catch (error) {
+        console.error('Error receiving file:', error);
+    } finally {
+        fileWriteStream.end();
     }
 }
 
@@ -234,7 +288,7 @@ export async function handleStatusUpdate(message) {
     }
 }
 
-export async function handleResult(message) {        
+export async function handleResult(message) {
     try {
         const { proposalId, result } = message.payload
 
