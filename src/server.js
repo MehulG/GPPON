@@ -2,6 +2,7 @@ import express from 'express';
 import { setupNetwork, DEFAULT_CONFIG } from './setup.js';
 import GPPONNode from './modules/GPPON_node.js'
 import net from 'net'
+import { createAndMonitorTask, TASK_CONFIGS } from './createTask.js'
 
 const app = express();
 app.use(express.json());
@@ -137,13 +138,54 @@ app.post('/network/:networkId/node', async (req, res) => {
 
         res.status(201).json({
             port: node.config.port,
-            peerCount: node.getDiscoveredPeers().length
+            peerCount: node.getDiscoveredPeers().length,
+            peerId: node.peerId
         });
     } catch (error) {
         console.error('Error adding node:', error);
         res.status(500).json({ error: error.message });
     }
 });
+
+
+// Create a new task proposal
+app.post('/tasks/create', async (req, res) => {
+    try {
+        let networkId = req.body.networkId;
+        let nodeId = req.body.nodeId;
+
+
+        if (!networkId || !nodeId) {
+            return res.status(400).json({ error: 'networkId, nodeId, and peerId are required' });
+        }
+        const network = activeNetworks.get(networkId)
+
+        let actualNode;
+        for (let i = 0; i < network.nodes.length; i++) {
+            if (network.nodes[i].peerId === nodeId) {
+                actualNode = network.nodes[i];
+                break;
+            }
+        }
+
+        const result = await createAndMonitorTask(
+            actualNode,
+            TASK_CONFIGS.nginxServer
+        )
+        
+        res.status(201).json({
+            message: 'Task proposal created successfully',
+            taskDetails: result
+        })
+    } catch (error) {
+        console.error('Task proposal creation failed:', error)
+        res.status(500).json({
+            message: 'Failed to create task proposal',
+            error: error.message
+        })
+    }
+})
+
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
