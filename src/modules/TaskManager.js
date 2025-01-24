@@ -7,8 +7,9 @@ import { TaskState } from './states/taskState.js'
 import { TaskProposal } from './proposals/taskProposal.js'
 import { TASK_PROTOCOLS } from './protocols/taskProtocols.js';
 import runDocker from './run_docker.js';
-import { handleAcceptance, handleProposal, handleLockRequest, handleProtocol, handleResult, handleStatusUpdate, handleUnlockRequest, handleFileReception } from './HandleProposal.js';
+import { handleAcceptance, handleProposal, handleLockRequest, handleOutputReception, handleProtocol, handleResult, handleStatusUpdate, handleUnlockRequest, handleFileReception, streamFile } from './HandleProposal.js';
 import { TaskUtility } from './TaskUtility.js';
+import fs from 'fs';
 
 class TaskManager extends EventEmitter {
     constructor(node) {
@@ -35,6 +36,7 @@ class TaskManager extends EventEmitter {
         this.node.node.handle('/gppon/task/lock/1.0.0', handleProtocol.bind(this, handleLockRequest.bind(this)))
         this.node.node.handle('/gppon/task/unlock/1.0.0', handleProtocol.bind(this, handleUnlockRequest.bind(this)))
         this.node.node.handle('/gppon/task/file/1.0.0', handleFileReception.bind(this))
+        this.node.node.handle('/gppon/task/output/1.0.0', handleOutputReception.bind(this))
     }
 
     async broadcastProposal(proposal) {
@@ -336,7 +338,7 @@ class TaskManager extends EventEmitter {
             proposal.state = TaskState.RUNNING
 
             console.log(TASK_PROTOCOLS.STATUS);
-            
+
 
             // Notify proposer
             const stream = await this.node.node.dialProtocol(proposerPeerId, TASK_PROTOCOLS.STATUS)
@@ -347,8 +349,15 @@ class TaskManager extends EventEmitter {
             console.log(`Node ${this.node.config.port}: Starting task execution for proposal ${proposal.id}`)
 
             // Simulate task execution with a delay
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            await runDocker(proposal);
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            // await runDocker(proposal);
+            //send result
+            let filePaths = [`/home/badass/Documents/GPPON/GPPON/src/out.mp4`];
+            console.log(`out filePaths: ${filePaths}`);
+
+            for (let filePath of filePaths) {
+                await this.streamOutput.call(this, filePath, proposal.proposerId);
+            }
 
             await this.completeTask(proposal.id, { success: true });
         } catch (error) {
@@ -356,6 +365,28 @@ class TaskManager extends EventEmitter {
         }
     }
 
+    async streamOutput(filePath, to) {
+        try {
+            const fileName = filePath.split('/').pop();
+            const fileData = await fs.promises.readFile(filePath);
+            const nameBuffer = Buffer.from(`${fileName}\0`);
+
+            const peerStream = await this.node.node.dialProtocol(
+                peerIdFromString(to),
+                '/gppon/task/output/1.0.0'
+            );
+
+            await pipe(
+                [Buffer.concat([nameBuffer, fileData])],
+                peerStream.sink
+            );
+
+            console.log(`File ${fileName} streamed successfully to ${to}`);
+        } catch (error) {
+            console.error('Error streaming file:', error);
+            throw error;
+        }
+    }
 
     async completeTask(taskId, result) {
         const proposal = this.proposals.get(taskId)
@@ -364,7 +395,7 @@ class TaskManager extends EventEmitter {
             proposal.result = result
 
             console.log(`Node ${this.node.config.port}: Task ${taskId} completed with result: ${JSON.stringify(result)}`);
-            
+
 
             const message = {
                 type: 'TASK_RESULT',
@@ -386,7 +417,7 @@ class TaskManager extends EventEmitter {
                     console.error('Error creating PeerId:', error)
                     return null
                 }
-    
+
                 const stream = await this.node.node.dialProtocol(proposerPeerId, TASK_PROTOCOLS.RESULT)
                 await pipe(
                     [uint8arrays.fromString(JSON.stringify(message))],
@@ -411,15 +442,15 @@ class TaskManager extends EventEmitter {
     getProposalsByState(state) {
         return TaskUtility.getProposalsByState(this.proposals, state)
     }
-    
+
     getActiveTasks() {
         return TaskUtility.getActiveTasks(this.activeTasks)
     }
-    
+
     updateCapabilities(capabilities) {
         this.capabilities = TaskUtility.updateCapabilities(this.capabilities, capabilities)
     }
-    
+
     async cancelProposal(proposalId) {
         const proposal = this.proposals.get(proposalId)
         const cancelled = await TaskUtility.cancelProposal(proposal)
@@ -431,12 +462,12 @@ class TaskManager extends EventEmitter {
         }
         return cancelled
     }
-    
+
     canHandleTask(proposal) {
         return TaskUtility.canHandleTask(
-            this.capabilities, 
-            proposal, 
-            this.activeTasks, 
+            this.capabilities,
+            proposal,
+            this.activeTasks,
             this.maxConcurrentTasks
         )
     }

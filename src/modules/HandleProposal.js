@@ -267,6 +267,31 @@ export async function handleFileReception({ stream }) {
     }
 }
 
+export async function handleOutputReception({stream}) {
+    try {
+        let data = Buffer.alloc(0);
+        
+        for await (const chunk of stream.source) {
+            const buffer = Buffer.from(chunk.subarray());
+            data = Buffer.concat([data, buffer]);
+        }
+        
+        const nullIndex = data.indexOf(0);
+        if (nullIndex === -1) throw new Error('Invalid file format');
+        
+        const fileName = data.slice(0, nullIndex).toString();
+        const fileContent = data.slice(nullIndex + 1);
+        
+        await fs.promises.writeFile(`./${fileName}`, fileContent);
+        console.log(`File ${fileName} received and saved`);
+        
+        return { success: true, fileName };        
+
+    } catch (error) {
+        console.error('Error receiving file:', error);
+        throw error;
+    }
+}
 
 export async function handleStatusUpdate(message) {
     console.log('handleStatusUpdate');
