@@ -34,7 +34,7 @@ class TaskManager extends EventEmitter {
         this.node.node.handle('/gppon/task/result/1.0.0', handleProtocol.bind(this, handleResult.bind(this)))
         this.node.node.handle('/gppon/task/lock/1.0.0', handleProtocol.bind(this, handleLockRequest.bind(this)))
         this.node.node.handle('/gppon/task/unlock/1.0.0', handleProtocol.bind(this, handleUnlockRequest.bind(this)))
-        this.node.node.handle('/gppon/task/file/1.0.0', handleProtocol.bind(this, handleFileReception.bind(this)))
+        this.node.node.handle('/gppon/task/file/1.0.0', handleFileReception.bind(this))
     }
 
     async broadcastProposal(proposal) {

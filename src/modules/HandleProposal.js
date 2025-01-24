@@ -220,24 +220,17 @@ async function streamFile(filePath, acceptedBy) {
     try {
         const fileStream = fs.createReadStream(filePath);
         const peerStream = await this.node.node.dialProtocol(
-            peerIdFromString(acceptedBy),
+            peerIdFromString(acceptedBy), 
             '/gppon/task/file/1.0.0'
         );
-
-        // Use pipe() to handle the streaming
+        
+        // Wait for stream to complete before ending
         await pipe(
             fileStream,
-            // Optional transform to log chunks
-            async function* (source) {
-                for await (const chunk of source) {
-                    console.log(`Sending chunk: ${chunk.length} bytes`);
-                    yield chunk;
-                }
-            },
             peerStream.sink
         );
-
-        // The pipe() function will handle closing the stream properly
+        
+        console.log(`File streamed successfully to ${acceptedBy}`);
     } catch (error) {
         console.error('Error streaming file:', error);
         throw error;
@@ -247,19 +240,37 @@ async function streamFile(filePath, acceptedBy) {
 export async function handleFileReception({ stream }) {
     const filePath = './received.mp4';
     const fileWriteStream = fs.createWriteStream(filePath);
-
+    
     try {
-        // Collect chunks from the stream and write to file
         for await (const chunk of stream.source) {
-            console.log(`Received chunk: ${chunk.length} bytes`);
-            fileWriteStream.write(chunk);
+            // Handle Uint8ArrayList structure
+            if (chunk.bufs) {
+                // Write each buffer in the bufs array
+                for (const buf of chunk.bufs) {
+                    await new Promise((resolve, reject) => {
+                        fileWriteStream.write(buf, (error) => {
+                            if (error) reject(error);
+                            else resolve();
+                        });
+                    });
+                }
+            } else {
+                // Handle direct Uint8Array chunks
+                const buffer = chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk);
+                await new Promise((resolve, reject) => {
+                    fileWriteStream.write(buffer, (error) => {
+                        if (error) reject(error);
+                        else resolve();
+                    });
+                });
+            }
         }
-
-        console.log(`File received and saved to ${filePath}`);
+        
+        await new Promise(resolve => fileWriteStream.end(resolve));
+        return { success: true };
     } catch (error) {
         console.error('Error receiving file:', error);
-    } finally {
-        fileWriteStream.end();
+        throw error;
     }
 }
 
