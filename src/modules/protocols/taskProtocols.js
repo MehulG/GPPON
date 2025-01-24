@@ -6,7 +6,8 @@ export const TASK_PROTOCOLS = {
     ACCEPT: '/gppon/task/accept/1.0.0',
     STATUS: '/gppon/task/status/1.0.0',
     RESULT: '/gppon/task/result/1.0.0',
-    CANCEL: '/gppon/task/cancel/1.0.0'
+    CANCEL: '/gppon/task/cancel/1.0.0',
+    FILE:'/gppon/task/file/1.0.0'
   }
   
   export const MessageTypes = {

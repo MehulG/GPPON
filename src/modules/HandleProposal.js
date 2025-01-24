@@ -206,9 +206,12 @@ export async function handleAcceptance(message) {
             proposal.state = TaskState.ACCEPTED;
             proposal.acceptedBy = acceptedBy;
 
-            // Send data.mp4 to acceptedBy
-            const filePath = '/home/badass/Documents/GPPON/GPPON/src/test.mp4';
-            await streamFile.call(this, filePath, acceptedBy);
+            let filePaths = proposal.containerConfig.env.INPUT_FILE;
+            console.log(`filePaths: ${filePaths}`);
+            
+            for (let filePath of filePaths) {
+                await streamFile.call(this, filePath, acceptedBy);
+            }
         }
     } catch (error) {
         console.error('Error handling acceptance:', error);

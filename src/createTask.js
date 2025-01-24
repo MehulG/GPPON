@@ -92,7 +92,11 @@ export const TASK_CONFIGS = {
         ],
         cpu: 2,
         memory: 1024,
-        storage: 5
+        storage: 5,
+        env: {
+            INPUT_FILE: ['/home/badass/Documents/GPPON/GPPON/src/1MB.mp4','/home/badass/Documents/GPPON/GPPON/src/test.txt'],
+            OUTPUT_FILE: ['result.mp4']
+        }
     },
 
     // Machine learning training task
