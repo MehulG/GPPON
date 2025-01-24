@@ -207,7 +207,7 @@ export async function handleAcceptance(message) {
             proposal.acceptedBy = acceptedBy;
 
             // Send data.mp4 to acceptedBy
-            const filePath = '/home/badass/Documents/GPPON/GPPON/src/1MB.mp4';
+            const filePath = '/home/badass/Documents/GPPON/GPPON/src/test.mp4';
             await streamFile.call(this, filePath, acceptedBy);
         }
     } catch (error) {
@@ -218,19 +218,21 @@ export async function handleAcceptance(message) {
 
 async function streamFile(filePath, acceptedBy) {
     try {
-        const fileStream = fs.createReadStream(filePath);
+        const fileName = filePath.split('/').pop();
+        const fileData = await fs.promises.readFile(filePath);
+        const nameBuffer = Buffer.from(`${fileName}\0`);
+        
         const peerStream = await this.node.node.dialProtocol(
             peerIdFromString(acceptedBy), 
             '/gppon/task/file/1.0.0'
         );
         
-        // Wait for stream to complete before ending
         await pipe(
-            fileStream,
+            [Buffer.concat([nameBuffer, fileData])],
             peerStream.sink
         );
         
-        console.log(`File streamed successfully to ${acceptedBy}`);
+        console.log(`File ${fileName} streamed successfully to ${acceptedBy}`);
     } catch (error) {
         console.error('Error streaming file:', error);
         throw error;
@@ -238,41 +240,30 @@ async function streamFile(filePath, acceptedBy) {
 }
 
 export async function handleFileReception({ stream }) {
-    const filePath = './received.mp4';
-    const fileWriteStream = fs.createWriteStream(filePath);
-    
     try {
+        let data = Buffer.alloc(0);
+        
         for await (const chunk of stream.source) {
-            // Handle Uint8ArrayList structure
-            if (chunk.bufs) {
-                // Write each buffer in the bufs array
-                for (const buf of chunk.bufs) {
-                    await new Promise((resolve, reject) => {
-                        fileWriteStream.write(buf, (error) => {
-                            if (error) reject(error);
-                            else resolve();
-                        });
-                    });
-                }
-            } else {
-                // Handle direct Uint8Array chunks
-                const buffer = chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk);
-                await new Promise((resolve, reject) => {
-                    fileWriteStream.write(buffer, (error) => {
-                        if (error) reject(error);
-                        else resolve();
-                    });
-                });
-            }
+            const buffer = Buffer.from(chunk.subarray());
+            data = Buffer.concat([data, buffer]);
         }
         
-        await new Promise(resolve => fileWriteStream.end(resolve));
-        return { success: true };
+        const nullIndex = data.indexOf(0);
+        if (nullIndex === -1) throw new Error('Invalid file format');
+        
+        const fileName = data.slice(0, nullIndex).toString();
+        const fileContent = data.slice(nullIndex + 1);
+        
+        await fs.promises.writeFile(`./${fileName}`, fileContent);
+        console.log(`File ${fileName} received and saved`);
+        
+        return { success: true, fileName };
     } catch (error) {
         console.error('Error receiving file:', error);
         throw error;
     }
 }
+
 
 export async function handleStatusUpdate(message) {
     console.log('handleStatusUpdate');
