@@ -7,7 +7,7 @@ import { TaskState } from './states/taskState.js'
 import { TaskProposal } from './proposals/taskProposal.js'
 import { TASK_PROTOCOLS } from './protocols/taskProtocols.js';
 import runDocker from './run_docker.js';
-import { handleAcceptance, handleProposal, handleLockRequest, handleOutputReception, handleProtocol, handleResult, handleStatusUpdate, handleUnlockRequest, handleFileReception, streamFile } from './HandleProposal.js';
+import { handleAcceptance, handleProposal, handleLockRequest, handleOutputReception, handleProtocol, handleResult, handleStatusUpdate, handleUnlockRequest, handleFileReception } from './HandleProposal.js';
 import { TaskUtility } from './TaskUtility.js';
 import fs from 'fs';
 
