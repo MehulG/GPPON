@@ -7,6 +7,7 @@ export default function runDocker(proposal) {
             console.log("Running Docker...");
             console.log("===============================================================");
             console.log(proposal.containerConfig);
+            const input = {dataProcess: proposal.containerConfig};
 
             console.log(`Current directory: ${process.cwd()}`);
 
@@ -14,7 +15,7 @@ export default function runDocker(proposal) {
             const scriptPath = path.resolve(process.cwd(), "./python-image/test.py");
 
             // JSON input to pass to the Python script
-            const jsonInput = JSON.stringify(proposal.containerConfig);
+            const jsonInput = JSON.stringify(input);
 
             // Spawn the Python script as a subprocess
             const pythonProcess = spawn("python3", [scriptPath, jsonInput]);

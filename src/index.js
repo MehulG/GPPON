@@ -20,7 +20,7 @@ async function main() {
         try {
             const result = await createAndMonitorTask(
                 taskNode,
-                TASK_CONFIGS.nginxServer
+                TASK_CONFIGS.videoProcess
             )
             console.log('Task execution completed:', result)
         } catch (error) {
