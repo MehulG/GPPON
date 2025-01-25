@@ -16,11 +16,16 @@ async function main() {
         // Get a non-registrar node to create tasks
         const taskNode = network.nodes[0] // First non-registrar node
         console.log(taskNode.peerId);
+        let task = TASK_CONFIGS.videoProcess
+        task.env = {
+            INPUT_FILE: ['/home/badass/Documents/GPPON/GPPON/src/1MB.mp4'],
+            OUTPUT_FILE: ['result.mp4']
+        }
 
         try {
             const result = await createAndMonitorTask(
                 taskNode,
-                TASK_CONFIGS.videoProcess
+                task
             )
             console.log('Task execution completed:', result)
         } catch (error) {

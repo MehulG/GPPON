@@ -244,6 +244,9 @@ async function streamFile(filePath, acceptedBy) {
 
 export async function handleFileReception({ stream }) {
     try {
+        console.log('handleFileReception');
+        console.log('stream:', JSON.stringify(stream, null, 2));
+        
         let data = Buffer.alloc(0);
         
         for await (const chunk of stream.source) {
@@ -257,7 +260,7 @@ export async function handleFileReception({ stream }) {
         const fileName = data.slice(0, nullIndex).toString();
         const fileContent = data.slice(nullIndex + 1);
         
-        await fs.promises.writeFile(`./app/${fileName}`, fileContent);
+        await fs.promises.writeFile(`./${fileName}`, fileContent);
         console.log(`File ${fileName} received and saved`);
         
         return { success: true, fileName };
