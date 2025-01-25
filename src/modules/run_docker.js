@@ -12,7 +12,7 @@ export default function runDocker(proposal) {
             console.log(`Current directory: ${process.cwd()}`);
 
             // Path to the Python script
-            const scriptPath = path.resolve(process.cwd(), "./python-image/test.py");
+            const scriptPath = path.resolve(process.cwd(), "../../video-gen/docker_gen.py");
 
             // JSON input to pass to the Python script
             const jsonInput = JSON.stringify(input);
@@ -54,6 +54,3 @@ export default function runDocker(proposal) {
         }
     });
 }
-
-
-
