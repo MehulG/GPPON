@@ -174,7 +174,6 @@ class TaskManager extends EventEmitter {
                 }
 
                 const response = JSON.parse(new TextDecoder().decode(responseData))
-                // console.log(`response: ${JSON.stringify(response, null, 2)}`);
 
                 if (response.result.success) {
                     console.log(`Node ${this.node.config.port}: Successfully acquired lock for proposal ${proposalId}`)
@@ -277,7 +276,6 @@ class TaskManager extends EventEmitter {
                 }
 
                 const response = JSON.parse(new TextDecoder().decode(responseData))
-                console.log(`response: ${JSON.stringify(response, null, 2)}`);
 
                 if (response.status === 'ok') {
                     console.log(`Node ${this.node.config.port}: Successfully acquired acceptance for proposal ${proposalId}`)
@@ -348,22 +346,16 @@ class TaskManager extends EventEmitter {
                 stream.sink
             )
             console.log(`Node ${this.node.config.port}: Starting task execution for proposal ${proposal.id}`)
-            console.log(`proposal: ${JSON.stringify(proposal, null, 2)}`);
 
             // Simulate task execution with a delay
             // await new Promise(resolve => setTimeout(resolve, 2000));
             await runDocker(proposal);
-            //send result
-            console.log("After runDocker");
-            
+            //send result            
             const folderName = `proposal_${proposal.id}`;
-            console.log(`foldername: ${folderName}`);
 
             const folderPath = path.join(process.cwd(), folderName);
-            console.log(`folderPath: ${folderPath}`);
 
             let filePaths = [folderPath+"/"+proposal.containerConfig.env.OUTPUT_FILE[0].split('/').pop()]
-            console.log(`out filePaths: ${filePaths}`);
             for (let filePath of filePaths) {
                 await this.streamOutput.call(this, filePath, proposal.proposerId);
             }
@@ -416,8 +408,6 @@ class TaskManager extends EventEmitter {
             }
 
             try {
-                console.log('proposal.proposerId', proposal.proposerId);
-
                 let proposerPeerId;
                 try {
                     proposerPeerId = peerIdFromString(proposal.proposerId)

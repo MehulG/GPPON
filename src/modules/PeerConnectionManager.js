@@ -74,7 +74,6 @@ class PeerConnectionManager extends EventEmitter {
     this.connectionAttempts.delete(peerId)
     this.startHeartbeat(peerId)
     
-    // console.log(`Node ${this.node.peerId.toString().slice(-4)}: Connected to peer ${peerId}`)
     this.emit('peerConnected', {
       peerId,
       timestamp: Date.now(),
