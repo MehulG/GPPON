@@ -260,7 +260,7 @@ export async function handleFileReception({ stream }) {
         const fileName = data.slice(0, nullIndex).toString();
         const fileContent = data.slice(nullIndex + 1);
         
-        await fs.promises.writeFile(`./${fileName}`, fileContent);
+        await fs.promises.writeFile(`${fileName}`, fileContent);
         console.log(`File ${fileName} received and saved`);
         
         return { success: true, fileName };

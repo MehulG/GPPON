@@ -192,13 +192,13 @@ app.post('/tasks/create', async (req, res) => {
         tasks[split].env = {
           RESOLUTION: resolution,
           INPUT_FILE: [split_videos.parts[split]],
-          OUTPUT_FILE: ["out_" + split_videos.parts[split]]
+          OUTPUT_FILE: ["out_" + split_videos.parts[split].split("/").pop()]
         }
         let taskPromise = createAndMonitorTask(actualNode, tasks[split])
         let taskID = Date.now().toString();
-        activeTasks.push({ taskID, taskPromise});
+        activeTasks.push({ taskID, taskPromise });
       }
-      return res.status(201).json({createdTasks: tasks});
+      return res.status(201).json({ createdTasks: tasks });
     } else {
       return res.status(400).json({ error: 'supported task_type: [videoProcess]' });
     }

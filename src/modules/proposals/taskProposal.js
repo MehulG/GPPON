@@ -16,7 +16,8 @@ export class TaskProposal {
             command: config.command,
             env: config.env || {},
             ports: config.ports || [],
-            volumes: config.volumes || []
+            volumes: config.volumes || [],
+            entrypoint: config.entrypoint || ["/bin/sh"]
         }
         this.instances = config.instances || 1
         this.timeout = config.timeout || 3600  // seconds
