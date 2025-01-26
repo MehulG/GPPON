@@ -196,9 +196,9 @@ app.post('/tasks/create', async (req, res) => {
         }
         let taskPromise = createAndMonitorTask(actualNode, tasks[split])
         let taskID = Date.now().toString();
-        activeTasks.push({ taskID, taskPromise});
+        activeTasks.push({ taskID, taskPromise });
       }
-      return res.status(201).json({createdTasks: tasks});
+      return res.status(201).json({ createdTasks: tasks });
     } else {
       return res.status(400).json({ error: 'supported task_type: [videoProcess]' });
     }
