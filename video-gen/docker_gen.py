@@ -46,7 +46,7 @@ def create_dockerfile(payload_json):
     # Resolve CMD dynamically by replacing placeholders
     env = payload["env"]
     if "INPUT_FILE" in env:
-        dockerfile.append("COPY {} /app/".format(env["INPUT_FILE"]))
+        dockerfile.append("COPY {} /app/".format(env["INPUT_FILE"][0].split("/")[-1]))
         env["INPUT_FILE"] = env["INPUT_FILE"][0].split("/")[-1]
     
     cmd_resolved = [replace_placeholders(part, env) for part in payload["command"]]

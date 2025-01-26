@@ -103,7 +103,7 @@ export const TASK_CONFIGS = {
         command: [
             "-i", "/app/{{INPUT_FILE}}", 
             "-vf", "scale={{RESOLUTION}}", 
-            "-c:a", "copy", 
+            "-c:a", "copy", "-y", 
             "/output/{{OUTPUT_FILE}}"
         ],
         entrypoint: ["ffmpeg"]
