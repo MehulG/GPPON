@@ -34,7 +34,10 @@ def create_dockerfile(payload_json):
 
     # Set environment variables
     for key, value in payload.get("env", {}).items():
-        dockerfile.append(f'ENV {key.upper()}="{value}"')
+        splitFilePath = value
+        if key == "INPUT_FILE" or key == "OUTPUT_FILE":
+            splitFilePath = value[0].split("/")[-1]
+        dockerfile.append(f'ENV {key.upper()}="{splitFilePath}"')
 
     # Set entrypoint (ensure it's in the correct JSON format)
     entrypoint = json.dumps(payload.get("entrypoint", []))
@@ -42,6 +45,11 @@ def create_dockerfile(payload_json):
 
     # Resolve CMD dynamically by replacing placeholders
     env = payload["env"]
+    if "INPUT_FILE" in env:
+        env["INPUT_FILE"] = env["INPUT_FILE"][0].split("/")[-1]
+    if "OUTPUT_FILE" in env:
+        env["OUTPUT_FILE"] = env["OUTPUT_FILE"][0].split("/")[-1]
+    
     cmd_resolved = [replace_placeholders(part, env) for part in payload["command"]]
 
     # Set CMD (ensure it's in the correct JSON format)
@@ -89,8 +97,8 @@ def run_docker_container(payload):
 def main(payload):
     """Orchestrate Dockerfile creation, image building, and container running"""
     create_dockerfile(payload)
-    subprocess.run(['docker', 'build', '-t', 'dynamic_image', '.'], check=True)
-    run_docker_container(payload)
+    # subprocess.run(['docker', 'build', '-t', 'dynamic_image', '.'], check=True)
+    # run_docker_container(payload)
 
 if __name__ == '__main__':
     if len(sys.argv) > 1:
