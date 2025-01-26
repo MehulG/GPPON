@@ -351,7 +351,7 @@ class TaskManager extends EventEmitter {
             
             // Simulate task execution with a delay
             // await new Promise(resolve => setTimeout(resolve, 2000));
-            // await runDocker(proposal);
+            await runDocker(proposal);
             //send result
             let filePaths = [`/home/badass/Documents/GPPON/GPPON/src/out.mp4`];
             console.log(`out filePaths: ${filePaths}`);

@@ -97,10 +97,16 @@ export const TASK_CONFIGS = {
     // },
 
     videoProcess: {
-        "image": "jrottenberg/ffmpeg:latest",
-        "cpu": 2,
-        "memory": 1024,
-        "storage": 5,
+        image: "jrottenberg/ffmpeg:latest",
+        cpu: 2,
+        memory: 1024,
+        command: [
+            "-i", "/app/{{INPUT_FILE}}", 
+            "-vf", "scale={{RESOLUTION}}", 
+            "-c:a", "copy", 
+            "/output/{{OUTPUT_FILE}}"
+        ],
+        entrypoint: ["ffmpeg"]
     },
 
     // Machine learning training task

@@ -7,12 +7,12 @@ export default function runDocker(proposal) {
             console.log("Running Docker...");
             console.log("===============================================================");
             console.log(proposal.containerConfig);
-            const input = {dataProcess: proposal.containerConfig};
+            const input = proposal.containerConfig;
 
             console.log(`Current directory: ${process.cwd()}`);
 
             // Path to the Python script
-            const scriptPath = path.resolve(process.cwd(), "../video-gen/docker_gen.py");
+            const scriptPath = path.resolve(process.cwd(), "./video-gen/docker_gen.py");
 
             // JSON input to pass to the Python script
             const jsonInput = JSON.stringify(input);
