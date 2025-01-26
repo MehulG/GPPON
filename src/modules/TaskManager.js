@@ -347,14 +347,14 @@ class TaskManager extends EventEmitter {
                 stream.sink
             )
             console.log(`Node ${this.node.config.port}: Starting task execution for proposal ${proposal.id}`)
-
+            console.log(`proposal: ${JSON.stringify(proposal, null, 2)}`);
+            
             // Simulate task execution with a delay
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            // await new Promise(resolve => setTimeout(resolve, 2000));
             // await runDocker(proposal);
             //send result
             let filePaths = [`/home/badass/Documents/GPPON/GPPON/src/out.mp4`];
             console.log(`out filePaths: ${filePaths}`);
-
             for (let filePath of filePaths) {
                 await this.streamOutput.call(this, filePath, proposal.proposerId);
             }

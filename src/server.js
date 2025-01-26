@@ -15,6 +15,8 @@ const upload = multer({ dest: "uploads/" });
 
 // Store active networks
 const activeNetworks = new Map();
+let activeTasks = [];
+let completedTasks = [];
 
 // Start a new GPPON network
 app.post('/network/start', async (req, res) => {
@@ -162,9 +164,10 @@ app.post('/tasks/create', async (req, res) => {
     let task_input = req.body.task_input;
     let task_result = req.body.task_result;
     let splits = req.body.splits;
+    let resolution = req.body.resolution;
 
-    if (!networkId || !nodeId || !task_type || !task_input || !task_result || !splits) {
-      return res.status(400).json({ error: 'networkId, nodeId, task_type, task_input, task_result, and splits are required' });
+    if (!networkId || !nodeId || !task_type || !task_input || !task_result || !splits || !resolution) {
+      return res.status(400).json({ error: 'networkId, nodeId, task_type, task_input, task_result, splits and resolution are required' });
     }
 
     const network = activeNetworks.get(networkId)
@@ -177,32 +180,28 @@ app.post('/tasks/create', async (req, res) => {
       }
     }
 
-
     if (task_type === 'videoProcess') {
       let targetSize = fs.statSync(task_input).size;
       let targetSizeMB = targetSize / (1024 * 1024);
       let split_videos = await splitVideoBySize(task_input, parseFloat(targetSizeMB / splits), task_result)
       let tasks = []
-      console.log(`split_videos: ${JSON.stringify(split_videos, null, 2)}`);
-      
+      console.log(split_videos.parts);
+
       for (let split = 0; split < split_videos.parts.length; split++) {
         tasks[split] = TASK_CONFIGS.videoProcess
         tasks[split].env = {
+          RESOLUTION: resolution,
           INPUT_FILE: [split_videos.parts[split]],
-          OUTPUT_FILE: [task_result]
+          OUTPUT_FILE: ["out_" + split_videos.parts[split]]
         }
+        let taskPromise = createAndMonitorTask(actualNode, tasks[split])
+        let taskID = Date.now().toString();
+        activeTasks.push({ taskID, taskPromise});
       }
-      for (let split = 0; split < split_videos.parts.length; split++) {
-        await createAndMonitorTask(actualNode, tasks[split])
-      }
+      return res.status(201).json({createdTasks: tasks});
     } else {
       return res.status(400).json({ error: 'supported task_type: [videoProcess]' });
     }
-
-    res.status(201).json({
-      message: 'Task proposal created successfully',
-      taskDetails: "result"
-    })
   } catch (error) {
     console.error('Task proposal creation failed:', error)
     res.status(500).json({
@@ -211,6 +210,56 @@ app.post('/tasks/create', async (req, res) => {
     })
   }
 })
+
+// Get active tasks status
+// app.get('/tasks/status', (req, res) => {
+//   try {
+//     const activeTasksInfo = activeTasks.map(({ taskID }) => ({
+//       taskID,
+//       isActive: true
+//     }));
+//     res.status(200).json(activeTasksInfo);
+//   } catch (error) {
+//     console.error('Failed to get tasks status:', error);
+//     res.status(500).json({
+//       message: 'Failed to get tasks status',
+//       error: error.message
+//     });
+//   }
+// });
+
+// Check task completion status
+app.get('/tasks/status', async (req, res) => {
+  try {
+    const taskPromises = activeTasks.map(({ taskPromise }) => taskPromise);
+    
+    Promise.all(taskPromises)
+      .then(() => {
+        console.log('All video processing tasks completed successfully');
+        // Clear completed tasks
+        activeTasks = [];
+        res.status(200).json({ 
+          status: 'completed',
+          message: 'All tasks completed successfully'
+        });
+      })
+      .catch((error) => {
+        console.error('Some tasks failed:', error);
+        res.status(500).json({
+          status: 'failed',
+          message: 'Some tasks failed to complete',
+          error: error.message
+        });
+      });
+  } catch (error) {
+    console.error('Failed to check task completion:', error);
+    res.status(500).json({
+      message: 'Failed to check task completion status',
+      error: error.message
+    });
+  }
+});
+
 
 async function isPortAvailable(port) {
   return new Promise((resolve) => {

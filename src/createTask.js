@@ -81,19 +81,26 @@ export const TASK_CONFIGS = {
     },
 
     // Video processing task
-    videoProcess: {
-        image: 'jrottenberg/ffmpeg:latest',
-        command: [
-            'ffmpeg',
-            '-i', 'input.mp4',
-            '-c:v', 'libx264',
-            '-preset', 'medium',
-            'output.mp4'
-        ],
-        cpu: 2,
-        memory: 1024,
-        storage: 5,
+    // videoProcess: {
+    //     image: 'jrottenberg/ffmpeg:latest',
+    //     command: [
+    //         'ffmpeg',
+    //         '-i', 'input.mp4',
+    //         '-c:v', 'libx264',
+    //         '-preset', 'medium',
+    //         'output.mp4'
+    //     ],
+    //     cpu: 2,
+    //     memory: 1024,
+    //     storage: 5,
 
+    // },
+
+    videoProcess: {
+        "image": "jrottenberg/ffmpeg:latest",
+        "cpu": 2,
+        "memory": 1024,
+        "storage": 5,
     },
 
     // Machine learning training task
