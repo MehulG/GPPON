@@ -2,6 +2,7 @@ import os
 import subprocess
 import json
 import re
+import sys
 
 # Function to replace placeholders
 def replace_placeholders(value, env_dict):
@@ -37,7 +38,7 @@ def create_dockerfile(payload_json):
 
     # Resolve CMD dynamically by replacing placeholders
     env = payload["env"]
-    cmd_resolved = [replace_placeholders(part, env) for part in payload["cmd"]]
+    cmd_resolved = [replace_placeholders(part, env) for part in payload["command"]]
 
     # Set CMD (ensure it's in the correct JSON format)
     cmd_resolved_json = json.dumps(cmd_resolved)
@@ -87,32 +88,14 @@ def main(payload):
     subprocess.run(['docker', 'build', '-t', 'dynamic_image', '.'], check=True)
     run_docker_container(payload)
 
-# Example payload
 if __name__ == '__main__':
-    ffmpeg_payload = {
-        "image": "jrottenberg/ffmpeg:latest",
-        "cpu": 2,
-        "memory": 1024,
-        "env": {
-            "input": "big_buck_bunny_720p_20mb.mp4",
-            "output": "result.mp4",
-            "resolution": "100:100"
-        },
-        "cmd": [
-            "-i", "/app/{{input}}", 
-            "-vf", "scale={{resolution}}", 
-            "-c:a", "copy", 
-            "/output/{{output}}"
-        ],
-        "entrypoint": ["ffmpeg"]
-    }
-    python_payload = {
-        "image": "python:3.9-slim",
-        "entrypoint": ["python"],
-        "cmd": [
-            "-c", 
-            "import pandas as pd; print(pd.DataFrame({'col1': [1,2,3]}))"
-        ]
-    }
+    if len(sys.argv) > 1:
+        json_input = sys.argv[1]
+    else:
+        print("Error: JSON input is required as an argument.")
+        sys.exit(1)
+
+    config = json.loads(json_input)
+    print("Parsed JSON input:", json.dumps(config, indent=4))
     
-    main(ffmpeg_payload)
+    main(config)
