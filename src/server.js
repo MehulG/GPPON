@@ -399,5 +399,9 @@ app.listen(PORT, () => {
   console.log('  DELETE /network/:networkId   - Stop a network');
   console.log('  GET    /networks             - List all active networks');
   console.log('  POST   /network/:networkId/node - Add a node to network');
+  console.log('  POST   /tasks/create         - Create a new task proposal');
+  console.log('  GET    /tasks/status         - Check task completion status');
+  console.log('  POST   /split-video          - Split a video file into parts');
+  console.log('  POST   /combine-videos       - Combine split video parts into one');
 });
 
