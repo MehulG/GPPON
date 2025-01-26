@@ -46,9 +46,8 @@ def create_dockerfile(payload_json):
     # Resolve CMD dynamically by replacing placeholders
     env = payload["env"]
     if "INPUT_FILE" in env:
+        dockerfile.append("COPY {} /app/".format(env["INPUT_FILE"]))
         env["INPUT_FILE"] = env["INPUT_FILE"][0].split("/")[-1]
-    if "OUTPUT_FILE" in env:
-        env["OUTPUT_FILE"] = env["OUTPUT_FILE"][0].split("/")[-1]
     
     cmd_resolved = [replace_placeholders(part, env) for part in payload["command"]]
 
@@ -97,8 +96,8 @@ def run_docker_container(payload):
 def main(payload):
     """Orchestrate Dockerfile creation, image building, and container running"""
     create_dockerfile(payload)
-    # subprocess.run(['docker', 'build', '-t', 'dynamic_image', '.'], check=True)
-    # run_docker_container(payload)
+    subprocess.run(['docker', 'build', '-t', 'dynamic_image', '.'], check=True)
+    run_docker_container(payload)
 
 if __name__ == '__main__':
     if len(sys.argv) > 1:
