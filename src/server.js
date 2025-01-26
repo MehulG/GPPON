@@ -28,7 +28,6 @@ app.post('/network/start', async (req, res) => {
     };
 
     console.log(`Starting new network with ID ${networkId}`);
-    console.log('Configuration:', config);
 
     const network = await setupNetwork(config);
     activeNetworks.set(networkId, network);
@@ -296,7 +295,6 @@ app.post("/split-video", upload.single("video"), async (req, res) => {
 
     const inputFile = req.file.path;
     const outputDir = path.join("output", path.parse(req.file.originalname).name);
-    console.log("Output directory:", outputDir);
 
     const result = await splitVideoBySize(inputFile, parseFloat(targetSizeMB), outputDir);
     res.json(result);
@@ -318,8 +316,6 @@ app.post('/combine-videos', async (req, res) => {
   try {
     // Step 1: Get all .mp4 files from the output directory
     const parts = await getMp4Files(outputDirectory);
-
-    console.log('Video parts found:', parts);  // Debug log
 
     if (parts.length < 2) {
       return res.status(400).json({ message: 'You need to provide at least two video parts.' });
@@ -374,8 +370,6 @@ function getMp4Files(directory) {
       const mp4Files = files
         .filter(file => path.extname(file).toLowerCase() === '.mp4')
         .map(file => path.join(directory, file)); // Get full path
-
-      console.log('Filtered .mp4 files:', mp4Files); // Debug log
 
       resolve(mp4Files);
     });

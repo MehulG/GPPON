@@ -4,13 +4,11 @@ import { spawn } from 'child_process';
 
 async function setupDirectory(proposal) {
     try {
-        console.log(proposal)
         const folderName = `proposal_${proposal.id}`;
         const folderPath = path.join(process.cwd(), folderName);
 
         // Ensure directory exists
         await fs.mkdir(folderPath, { recursive: true });
-        console.log(`✅ Directory ensured: ${folderPath}`);
 
         return folderPath;
     } catch (error) {
@@ -23,12 +21,9 @@ export default async function runDocker(proposal) {
     return new Promise(async (resolve, reject) => {
         try {
             console.log("🚀 Running Docker...");
-            console.log("===============================================================");
-            console.log(proposal.containerConfig);
 
             // 1️⃣ Setup directory for proposal
             const folderPath = await setupDirectory(proposal);
-            console.log(`📂 Working in directory: ${folderPath}`);
             //copy file in directory
             // await fs.copyFile(path.resolve(proposal.containerConfig.env.INPUT_FILE[0].split('/').pop()), path.resolve(folderPath, proposal.containerConfig.env.INPUT_FILE[0].split('/').pop()));
             const srcPath = path.resolve(proposal.containerConfig.env.INPUT_FILE[0]); 

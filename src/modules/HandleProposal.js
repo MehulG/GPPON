@@ -207,7 +207,6 @@ export async function handleAcceptance(message) {
             proposal.acceptedBy = acceptedBy;
 
             let filePaths = proposal.containerConfig.env.INPUT_FILE;
-            console.log(`filePaths: ${filePaths}`);
             
             for (let filePath of filePaths) {
                 await streamFile.call(this, filePath, acceptedBy);
@@ -243,10 +242,7 @@ async function streamFile(filePath, acceptedBy) {
 }
 
 export async function handleFileReception({ stream }) {
-    try {
-        console.log('handleFileReception');
-        console.log('stream:', JSON.stringify(stream, null, 2));
-        
+    try {        
         let data = Buffer.alloc(0);
         
         for await (const chunk of stream.source) {
@@ -297,12 +293,9 @@ export async function handleOutputReception({stream}) {
 }
 
 export async function handleStatusUpdate(message) {
-    console.log('handleStatusUpdate');
-
     try {
         const { taskId, status, progress } = message.payload
         const task = this.proposals.get(taskId);
-        console.log(`task: ${JSON.stringify(task, null, 2)}`);
 
         if (task) {
             task.state = status

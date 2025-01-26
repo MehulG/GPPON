@@ -65,7 +65,6 @@ def create_dockerfile(payload_json):
 
     # Optionally return the generated Dockerfile content
     return dockerfile_content
-    print(dockerfile_content)
 
 def run_docker_container(payload, imageName):
     """Execute Docker container with comprehensive configuration"""
@@ -97,9 +96,7 @@ def run_docker_container(payload, imageName):
 
 def main(payload):
     """Orchestrate Dockerfile creation, image building, and container running"""
-
-    print("Payload: ", payload)
-
+    
     create_dockerfile(payload)
     imageName = "dynamic_image"+ str(uuid.uuid4())
     subprocess.run(['docker', 'build', '-t', imageName, '.'], check=True)
@@ -113,6 +110,5 @@ if __name__ == '__main__':
         sys.exit(1)
 
     config = json.loads(json_input)
-    print("Parsed JSON input:", json.dumps(config, indent=4))
     
     main(config)
