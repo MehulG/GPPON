@@ -4,12 +4,23 @@ import json
 import re
 import sys
 
-# Function to replace placeholders
 def replace_placeholders(value, env_dict):
-    """Replaces {{var}} placeholders with corresponding env values."""
+    """Replaces {{var}} placeholders with corresponding env values in both strings and lists."""
+    
+    def get_replacement(match):
+        key = match.group(1)  # Extract the key inside {{ }}
+        replacement = env_dict.get(key, match.group(0))  # Get value from env_dict or keep original placeholder
+        if isinstance(replacement, list):
+            return " ".join(map(str, replacement))  # Convert list to space-separated string
+        return str(replacement)  # Convert non-string values to strings
+
     if isinstance(value, str):
-        return re.sub(r"\{\{(.*?)\}\}", lambda match: env_dict.get(match.group(1), match.group(0)), value)
-    return value
+        return re.sub(r"\{\{(.*?)\}\}", get_replacement, value)
+    
+    elif isinstance(value, list):
+        return [replace_placeholders(item, env_dict) for item in value]  # Process each list element recursively
+    
+    return value  # Return unchanged for non-string, non-list types
 
 def create_dockerfile(payload_json):
     # Parse payload from JSON
@@ -17,13 +28,6 @@ def create_dockerfile(payload_json):
 
     # Initialize Dockerfile lines list
     dockerfile = []
-
-    # Helper function to replace placeholders in a string
-    def replace_placeholders(value, env_dict):
-        """Replaces {{var}} placeholders with corresponding env values."""
-        if isinstance(value, str):
-            return re.sub(r"\{\{(.*?)\}\}", lambda match: env_dict.get(match.group(1), match.group(0)), value)
-        return value
 
     # Set base image
     dockerfile.append(f"FROM {payload['image']}")
