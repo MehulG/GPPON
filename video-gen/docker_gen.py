@@ -3,6 +3,7 @@ import subprocess
 import json
 import re
 import sys
+import uuid
 
 def replace_placeholders(value, env_dict):
     """Replaces {{var}} placeholders with corresponding env values in both strings and lists."""
@@ -66,8 +67,9 @@ def create_dockerfile(payload_json):
     return dockerfile_content
     print(dockerfile_content)
 
-def run_docker_container(payload):
+def run_docker_container(payload, imageName):
     """Execute Docker container with comprehensive configuration"""
+    print("Running Docker container...")
     run_cmd = [
         'docker', 'run', '--rm',
         # Resource constraints
@@ -79,7 +81,7 @@ def run_docker_container(payload):
         '-v', f'{os.getcwd()}:/output',
         
         # Image
-        'dynamic_image'
+        imageName
     ]
     
     try:
@@ -95,9 +97,13 @@ def run_docker_container(payload):
 
 def main(payload):
     """Orchestrate Dockerfile creation, image building, and container running"""
+
+    print("Payload: ", payload)
+
     create_dockerfile(payload)
-    subprocess.run(['docker', 'build', '-t', 'dynamic_image', '.'], check=True)
-    run_docker_container(payload)
+    imageName = "dynamic_image"+ str(uuid.uuid4())
+    subprocess.run(['docker', 'build', '-t', imageName, '.'], check=True)
+    run_docker_container(payload, imageName)
 
 if __name__ == '__main__':
     if len(sys.argv) > 1:
