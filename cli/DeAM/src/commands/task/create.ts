@@ -48,7 +48,7 @@ export default class TaskCreate extends Command {
       const splits_str = await cli.prompt('Number of splits', {
         required: true,
         type: 'normal',
-        default: '1',
+        default: '2',
       })
       const splits = parseInt(splits_str, 10)
 
