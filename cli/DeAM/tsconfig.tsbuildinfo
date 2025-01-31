@@ -1,0 +1,1 @@
+{"root":["./src/index.ts","./src/commands/ping.ts","./src/commands/foo/bar.ts","./src/commands/hello/index.ts","./src/commands/hello/world.ts","./src/commands/network/details.ts","./src/commands/network/start.ts"],"version":"5.7.3"}
