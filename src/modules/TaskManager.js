@@ -351,7 +351,7 @@ class TaskManager extends EventEmitter {
             console.log(`proposal: ${JSON.stringify(proposal, null, 2)}`);
 
             // Simulate task execution with a delay
-            // await new Promise(resolve => setTimeout(resolve, 2000));
+            await new Promise(resolve => setTimeout(resolve, 1000));
             await runDocker(proposal);
             //send result
             console.log("After runDocker");
