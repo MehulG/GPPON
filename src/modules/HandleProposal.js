@@ -210,6 +210,13 @@ export async function handleAcceptance(message) {
             
             for (let filePath of filePaths) {
                 await streamFile.call(this, filePath, acceptedBy);
+                fs.unlink(filePath, (err) => {
+                    if (err) {
+                        console.error(`Error deleting file ${filePath}:`, err);
+                    } else {
+                        console.log(`File ${filePath} deleted`);
+                    }
+                });
             }
         }
     } catch (error) {
@@ -281,7 +288,7 @@ export async function handleOutputReception({stream}) {
         const fileName = data.slice(0, nullIndex).toString();
         const fileContent = data.slice(nullIndex + 1);
         
-        await fs.promises.writeFile(`./out/${fileName}`, fileContent);
+        await fs.promises.writeFile(`./src/temp/${fileName}`, fileContent);
         console.log(`File ${fileName} received and saved`);
         
         return { success: true, fileName };        

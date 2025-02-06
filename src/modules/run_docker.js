@@ -26,12 +26,11 @@ export default async function runDocker(proposal) {
             const folderPath = await setupDirectory(proposal);
             //copy file in directory
             // await fs.copyFile(path.resolve(proposal.containerConfig.env.INPUT_FILE[0].split('/').pop()), path.resolve(folderPath, proposal.containerConfig.env.INPUT_FILE[0].split('/').pop()));
-            const srcPath = path.resolve(proposal.containerConfig.env.INPUT_FILE[0]); 
-            const destPath = path.resolve(folderPath, path.basename(proposal.containerConfig.env.INPUT_FILE[0]));
+            const srcPath = path.resolve(process.cwd(), path.basename(proposal.containerConfig.env.INPUT_FILE[0].split('/').pop()));
+            const destPath = path.resolve(folderPath, path.basename(proposal.containerConfig.env.INPUT_FILE[0].split('/').pop()));
 
             await fs.copyFile(srcPath, destPath);
 
-            
             // 2️⃣ Path to Python script
             const scriptPath = path.resolve(process.cwd(), "video-gen/docker_gen.py");
             const jsonInput = JSON.stringify(proposal.containerConfig);

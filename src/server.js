@@ -184,10 +184,9 @@ app.post('/tasks/create', async (req, res) => {
       let targetSizeMB = targetSize / (1024 * 1024);
       let split_videos = await splitVideoBySize(task_input, parseFloat(targetSizeMB / splits), task_result)
       let tasks = []
-      console.log(split_videos.parts);
 
       for (let split = 0; split < split_videos.parts.length; split++) {
-        tasks[split] = TASK_CONFIGS.videoProcess
+        tasks[split] = JSON.parse(JSON.stringify(TASK_CONFIGS.videoProcess))
         tasks[split].env = {
           RESOLUTION: resolution,
           INPUT_FILE: [split_videos.parts[split]],
@@ -230,26 +229,19 @@ app.post('/tasks/create', async (req, res) => {
 // Check task completion status
 app.get('/tasks/status', async (req, res) => {
   try {
-    const taskPromises = activeTasks.map(({ taskPromise }) => taskPromise);
-    
-    Promise.all(taskPromises)
-      .then(() => {
-        console.log('All video processing tasks completed successfully');
-        // Clear completed tasks
-        activeTasks = [];
-        res.status(200).json({ 
-          status: 'completed',
-          message: 'All tasks completed successfully'
-        });
-      })
-      .catch((error) => {
-        console.error('Some tasks failed:', error);
-        res.status(500).json({
-          status: 'failed',
-          message: 'Some tasks failed to complete',
-          error: error.message
-        });
-      });
+    const taskStatuses = await Promise.all(activeTasks.map(async ({ taskID, taskPromise }) => {
+      try {
+        const result = await Promise.race([taskPromise, new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 0))]);
+        return { taskID, status: 'completed' };
+      } catch (error) {
+        if (error.message === 'timeout') {
+          return { taskID, status: 'in progress' };
+        }
+        return { taskID, status: 'failed', error: error.message };
+      }
+    }));
+
+    res.status(200).json(taskStatuses);
   } catch (error) {
     console.error('Failed to check task completion:', error);
     res.status(500).json({

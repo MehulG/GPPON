@@ -348,7 +348,7 @@ class TaskManager extends EventEmitter {
             console.log(`Node ${this.node.config.port}: Starting task execution for proposal ${proposal.id}`)
 
             // Simulate task execution with a delay
-            // await new Promise(resolve => setTimeout(resolve, 2000));
+            await new Promise(resolve => setTimeout(resolve, 1000));
             await runDocker(proposal);
             //send result            
             const folderName = `proposal_${proposal.id}`;
