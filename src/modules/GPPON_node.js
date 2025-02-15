@@ -11,6 +11,12 @@ import { EventEmitter } from 'events'
 import PeerConnectionManager from './PeerConnectionManager.js'
 import TaskManager from './TaskManager.js'
 
+
+import { gossipsub } from '@chainsafe/libp2p-gossipsub'
+import { yamux } from '@chainsafe/libp2p-yamux'
+import { pubsubPeerDiscovery } from '@libp2p/pubsub-peer-discovery'
+
+
 class GPPONNode extends EventEmitter {
   constructor(config) {
     super()
@@ -26,38 +32,31 @@ class GPPONNode extends EventEmitter {
   async start() {
     const options = {
       addresses: {
-        listen: [`/ip4/127.0.0.1/tcp/${this.config.port}`]
+        listen: [`/ip4/0.0.0.0/tcp/${this.config.port}`]
       },
       transports: [tcp()],
       streamMuxers: [mplex()],
       connectionEncrypters: [noise()],
       services: {
         identify: identify(),
-        dht: kadDHT({
-          clientMode: false,
-          protocol: '/gppon/1.0.0',
-          initialStabilizeDelay: 1000,
-          queryDelay: 500,
-          enabled: true,
-          querySelfInterval: 1000,
-          randomWalk: {
-            enabled: true,
-            interval: 3000,
-            timeout: 1000
-          }
-        })
+        pubsub: gossipsub()
       },
       connectionManager: {
         minConnections: 5
       },
       peerDiscovery: [
-        ...(this.config.bootstrapList?.length ? [bootstrap({
-          list: this.config.bootstrapList,
-          timeout: 5000
-        })] : []),
-        ...(this.config.enableMDNS ? [mdns()] : [])
+        pubsubPeerDiscovery({
+          interval: 5000
+        }),
+      ...(this.config.enableMDNS ? [mdns()] : [])
       ]
     }
+
+    // if (this.config.bootstrapList?.length > 0) {
+      options.peerDiscovery.push(bootstrap({
+        list: this.config.bootstrapList
+      }))
+    // }
 
     this.node = await createLibp2p(options)
     this.peerId = this.node.peerId.toString()
@@ -79,6 +78,8 @@ class GPPONNode extends EventEmitter {
     // Handle peer discovery
     this.node.addEventListener('peer:discovery', (evt) => {
       try {
+        console.log(evt);
+
         if (evt?.detail?.id) {
           const peerId = evt.detail.id.toString()
           if (!this.discoveredPeers.has(peerId)) {
@@ -90,6 +91,23 @@ class GPPONNode extends EventEmitter {
         console.error('Error in peer:discovery event:', error)
       }
     })
+
+    this.node.addEventListener('peer:connect', (evt) => {
+      try {
+        console.log(evt);
+        
+        if (evt?.detail?.id) {
+          const peerId = evt.detail.id.toString()
+          if (!this.discoveredPeers.has(peerId)) {
+            this.discoveredPeers.add(peerId)
+            this.emit('peerDiscovered', peerId)
+          }
+        }
+      } catch (error) {
+        console.error('Error in peer:discovery event:', error)
+      }
+    })
+
 
     // Forward connection manager events
     this.connectionManager.on('peerConnected', (data) => {
