@@ -52,11 +52,11 @@ class GPPONNode extends EventEmitter {
       ]
     }
 
-    // if (this.config.bootstrapList?.length > 0) {
+    if (this.config.bootstrapList?.length > 0) {
       options.peerDiscovery.push(bootstrap({
         list: this.config.bootstrapList
       }))
-    // }
+    }
 
     this.node = await createLibp2p(options)
     this.peerId = this.node.peerId.toString()
