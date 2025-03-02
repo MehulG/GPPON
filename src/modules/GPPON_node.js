@@ -26,7 +26,7 @@ class GPPONNode extends EventEmitter {
     this.node = null
     this.peerId = null
     this.discoveredPeers = new Set()
-    this.isRegistrar = config.isRegistrar || false
+    this.isRegistrar = false
     this.connectionManager = null
     this.taskManager = null
   }
@@ -46,8 +46,6 @@ class GPPONNode extends EventEmitter {
       services: {
         identify: identify(),
         pubsub: gossipsub(),
-        autonat: autoNAT(),
-        nat: uPnPNAT()
       },
       connectionManager: {
         minConnections: 5
@@ -61,9 +59,9 @@ class GPPONNode extends EventEmitter {
     }
 
     // if (this.config.bootstrapList?.length > 0) {
-    options.peerDiscovery.push(bootstrap({
-      list: [`/ip4/35.223.109.24/tcp/5000/p2p/12D3KooWALsGz81mZUaXsQgYQGzpSg5zB885DJunYAyZpwrLiCvX`]
-    }))
+      options.peerDiscovery.push(bootstrap({
+        list: [`/ip4/35.223.109.24/tcp/5000/p2p/12D3KooWJa5rf3qANokGUJPMNVcJFyiiiifk8owzkdTUwuDXo2gz`]
+      }))
     // }
 
     this.node = await createLibp2p(options)
