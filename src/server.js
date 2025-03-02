@@ -136,7 +136,7 @@ app.post('/network/:networkId/node', async (req, res) => {
 
     const node = new GPPONNode({
       port: await findAvailablePort(nextPort),
-      enableMDNS: network.registrars[0].config.enableMDNS,
+      enableMDNS: false,
       bootstrapList
     });
 

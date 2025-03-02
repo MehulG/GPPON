@@ -39,14 +39,14 @@ async function setupNetwork(userConfig = {}) {
     let nextPort = config.baseRegistrarPort
 
     // Start first registrar
-    const firstRegistrar = new GPPONNode({
-      port: await findAvailablePort(nextPort),
-      enableMDNS: config.enableMDNS,
-      isRegistrar: true
-    })
-    await firstRegistrar.start()
-    registrars.push(firstRegistrar)
-    nextPort = firstRegistrar.config.port + 1
+    // const firstRegistrar = new GPPONNode({
+    //   port: await findAvailablePort(nextPort),
+    //   enableMDNS: config.enableMDNS,
+    //   isRegistrar: true
+    // })
+    // await firstRegistrar.start()
+    // registrars.push(firstRegistrar)
+    // nextPort = firstRegistrar.config.port + 1
 
     // Start remaining registrars with bootstrap to first registrar
     for (let i = 1; i < config.registrarCount; i++) {
@@ -54,7 +54,7 @@ async function setupNetwork(userConfig = {}) {
         port: await findAvailablePort(nextPort),
         enableMDNS: config.enableMDNS,
         isRegistrar: true,
-        bootstrapList: [firstRegistrar.getMultiaddr()]
+        // bootstrapList: [firstRegistrar.getMultiaddr()]
       })
       await registrar.start()
       registrars.push(registrar)
