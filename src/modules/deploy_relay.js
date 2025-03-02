@@ -9,7 +9,8 @@ import { bootstrap } from '@libp2p/bootstrap'
 import { identify } from '@libp2p/identify'
 import { EventEmitter } from 'events'
 import PeerConnectionManager from './PeerConnectionManager.js'
-import TaskManager from './TaskManager.js'
+// import TaskManager from './TaskManager.js'
+import { circuitRelayServer } from '@libp2p/circuit-relay-v2'
 
 
 import { gossipsub } from '@chainsafe/libp2p-gossipsub'
@@ -39,7 +40,8 @@ class GPPONNode extends EventEmitter {
       connectionEncrypters: [noise()],
       services: {
         identify: identify(),
-        pubsub: gossipsub()
+        pubsub: gossipsub(),
+        relay: circuitRelayServer()
       },
       connectionManager: {
         minConnections: 5
@@ -63,7 +65,7 @@ class GPPONNode extends EventEmitter {
 
     // Initialize managers after node is created
     this.connectionManager = new PeerConnectionManager(this.node)
-    this.taskManager = new TaskManager(this)
+    // this.taskManager = new TaskManager(this)
 
     // Set up event listeners
     this.setupEventListeners()
@@ -173,39 +175,7 @@ class GPPONNode extends EventEmitter {
     return null
   }
 
-  async createTask(config) {
-    if (!this.taskManager) {
-      throw new Error('TaskManager not initialized');
-    }
 
-    console.log(`Node ${this.config.port}: Attempting to create task`);
-    try {
-      const proposalId = await this.taskManager.createProposal(config);
-      console.log(`Node ${this.config.port}: Successfully created task with ID ${proposalId}`);
-      return proposalId;
-    } catch (error) {
-      console.error(`Node ${this.config.port}: Failed to create task:`, error);
-      throw error;
-    }
-  }
-  async acceptTask(proposalId) {
-    if (this.taskManager) {
-      return await this.taskManager.acceptProposal(proposalId)
-    }
-    throw new Error('TaskManager not initialized')
-  }
-
-  async getTaskStatus(proposalId) {
-    if (this.taskManager) {
-      const proposal = this.taskManager.proposals.get(proposalId)
-      return proposal ? {
-        state: proposal.state,
-        acceptedBy: proposal.acceptedBy,
-        result: proposal.result
-      } : null
-    }
-    return null
-  }
 
   async disconnectPeer(peerId) {
     if (this.connectionManager) {
@@ -213,11 +183,6 @@ class GPPONNode extends EventEmitter {
     }
   }
 
-  async updateCapabilities(capabilities) {
-    if (this.taskManager) {
-      this.taskManager.updateCapabilities(capabilities)
-    }
-  }
 
   async stop() {
     if (this.node) {
