@@ -48,40 +48,44 @@ class TaskManager extends EventEmitter {
         }
 
         const peers = await this.node.node.peerStore.all()
+        console.log("total peers", peers);
         const messageData = new TextEncoder().encode(JSON.stringify(message))
 
         const results = await Promise.allSettled(
             peers.map(async peer => {
                 try {
+                    // remove registar from peers
+                    if (peer.id.toString() != "12D3KooWJa5rf3qANokGUJPMNVcJFyiiiifk8owzkdTUwuDXo2gz") {
                     // Dial the peer
-                    const stream = await this.node.node.dialProtocol(peer.id, '/gppon/task/propose/1.0.0')
+                        const stream = await this.node.node.dialProtocol(peer.id, '/gppon/task/propose/1.0.0', { timeout: 30000 }) // Increase timeout to 30 seconds
 
-                    // Send the proposal
-                    await pipe([messageData], stream.sink)
+                        // Send the proposal
+                        await pipe([messageData], stream.sink)
 
-                    // Collect response data
-                    let responseData = new Uint8Array()
-                    for await (const chunk of stream.source) {
-                        const chunkArray = new Uint8Array(chunk.subarray())
-                        const newData = new Uint8Array(responseData.length + chunkArray.length)
-                        newData.set(responseData)
-                        newData.set(chunkArray, responseData.length)
-                        responseData = newData
-                    }
-
-                    if (responseData.length > 0) {
-                        // Parse response
-                        const responseText = new TextDecoder().decode(responseData)
-                        const response = JSON.parse(responseText)
-
-                        if (response.status === 'error') {
-                            throw new Error(response.message)
+                        // Collect response data
+                        let responseData = new Uint8Array()
+                        for await (const chunk of stream.source) {
+                            const chunkArray = new Uint8Array(chunk.subarray())
+                            const newData = new Uint8Array(responseData.length + chunkArray.length)
+                            newData.set(responseData)
+                            newData.set(chunkArray, responseData.length)
+                            responseData = newData
                         }
 
-                        console.log(`Successfully sent proposal to peer ${peer.id}`)
-                        return response
-                    } else {
-                        throw new Error('No response data received')
+                        if (responseData.length > 0) {
+                            // Parse response
+                            const responseText = new TextDecoder().decode(responseData)
+                            const response = JSON.parse(responseText)
+
+                            if (response.status === 'error') {
+                                throw new Error(response.message)
+                            }
+
+                            console.log(`Successfully sent proposal to peer ${peer.id}`)
+                            return response
+                        } else {
+                            throw new Error('No response data received')
+                        }
                     }
                 } catch (error) {
                     console.warn(`Failed to send proposal to peer ${peer.id}:`, error.message)
@@ -348,7 +352,7 @@ class TaskManager extends EventEmitter {
             console.log(`Node ${this.node.config.port}: Starting task execution for proposal ${proposal.id}`)
 
             // Simulate task execution with a delay
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            await new Promise(resolve => setTimeout(resolve, 5000));
             await runDocker(proposal);
             //send result            
             const folderName = `proposal_${proposal.id}`;
