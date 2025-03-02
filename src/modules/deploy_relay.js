@@ -41,7 +41,7 @@ class GPPONNode extends EventEmitter {
       services: {
         identify: identify(),
         pubsub: gossipsub(),
-        relay: circuitRelayServer()
+        circuitRelay: circuitRelayServer()
       },
       connectionManager: {
         minConnections: 5

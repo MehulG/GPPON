@@ -39,7 +39,7 @@ class GPPONNode extends EventEmitter {
       },
       transports: [
         tcp(),
-        circuitRelayTransport({ discoverRelays: 1 })
+        circuitRelayTransport()
       ],
       streamMuxers: [mplex()],
       connectionEncrypters: [noise()],
@@ -62,7 +62,7 @@ class GPPONNode extends EventEmitter {
 
     // if (this.config.bootstrapList?.length > 0) {
     options.peerDiscovery.push(bootstrap({
-      list: [`/ip4/35.223.109.24/tcp/5000/p2p/12D3KooWJa5rf3qANokGUJPMNVcJFyiiiifk8owzkdTUwuDXo2gz`]
+      list: [`/ip4/35.223.109.24/tcp/5000/p2p/12D3KooWALsGz81mZUaXsQgYQGzpSg5zB885DJunYAyZpwrLiCvX`]
     }))
     // }
 
